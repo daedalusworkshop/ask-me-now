@@ -1,0 +1,11 @@
+# secrets — never commit
+.env
+.env.*
+!.env.example
+
+# local environment and generated files
+.venv/
+work/
+__pycache__/
+*.pyc
+.DS_Store

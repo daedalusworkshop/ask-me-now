@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Listening Lab</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header id="top">
+  <div class="brand">Listening Lab</div>
+  <div id="title" class="title">nothing loaded</div>
+  <div class="chips">
+    <span id="chip-trans" class="chip"></span>
+    <span id="chip-jev" class="chip"></span>
+  </div>
+</header>
+
+<section id="player"><div class="empty">Load a test, a MIDI file, or a recording below.</div></section>
+<div id="expect" hidden></div>
+
+<details id="input" open>
+  <summary>Input</summary>
+  <div class="grid">
+    <div class="col">
+      <div class="label">Built-in tests</div>
+      <div class="row" id="test-buttons"></div>
+      <div class="label">Your file <span class="hint">video, audio or MIDI</span></div>
+      <div class="row">
+        <label class="btn file">Choose file…<input id="file" type="file" accept=".mp4,.m4v,.mov,.webm,.mkv,.avi,.mp3,.wav,.m4a,.aac,.ogg,.flac,.mid,.midi"></label>
+        <span id="file-name" class="hint"></span>
+      </div>
+    </div>
+    <div class="col wide">
+      <div class="label">Chord chart <span class="hint">overrides the detected chords · chords in a bar split it evenly</span></div>
+      <textarea id="chart" rows="3" spellcheck="false" placeholder="| G-7 C7 F#-7 B7 | F-7 Bb7 E-7 A7 |"></textarea>
+      <div class="row small">
+        <label>Tempo <input id="tempo" type="number" min="20" max="320" step="0.1" placeholder="BPM"></label>
+        <label>Beats/bar <input id="bpb" type="number" min="2" max="12" value="4"></label>
+        <label title="Time in the recording where bar 1 of the chart begins">Chart starts at <input id="chart-start" type="number" step="0.01" value="0"> s</label>
+        <label><input id="chart-repeat" type="checkbox" checked> repeat chart</label>
+      </div>
+      <div class="row small">
+        <label>Beats from
+          <select id="beat-source">
+            <option value="auto">auto</option>
+            <option value="fixed">fixed tempo</option>
+            <option value="detected">tracked from notes</option>
+            <option value="midi">MIDI file's tempo map</option>
+          </select>
+        </label>
+        <label>Home <select id="home"></select></label>
+        <button id="analyze" class="btn primary">Analyse</button>
+      </div>
+    </div>
+  </div>
+</details>
+
+<div id="toolbar">
+  <div class="group">
+    <button class="btn icon" id="zoom-out" title="Zoom out">−</button>
+    <button class="btn icon" id="zoom-in" title="Zoom in">+</button>
+    <button class="btn" id="zoom-fit">fit</button>
+    <label class="toggle"><input type="checkbox" id="follow" checked> follow playhead</label>
+  </div>
+  <div class="group">
+    <div class="menu">
+      <button class="btn" id="lanes-btn">lanes ▾</button>
+      <div id="lanes-menu" class="menu-pop" hidden></div>
+    </div>
+    <button class="btn" id="ask-jev">ask Jev</button>
+    <a class="btn" id="export-csv">CSV</a>
+    <a class="btn" id="export-json">JSON</a>
+  </div>
+</div>
+
+<main id="lanes-wrap">
+  <div id="ruler" class="lane ruler">
+    <div class="lane-label"><div class="lane-text"></div></div>
+    <div class="lane-axis"><canvas></canvas></div>
+    <div class="lane-body"><canvas></canvas></div>
+  </div>
+  <div id="lanes"></div>
+  <div id="playhead"></div>
+  <div id="hoverline"></div>
+</main>
+
+<footer id="readout">—</footer>
+<div id="busy" hidden><div class="busy-box"><div class="spinner"></div><div id="busy-text">Working…</div></div></div>
+<div id="toast" hidden></div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

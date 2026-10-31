@@ -1,0 +1,11 @@
+{
+  "_readme": "Settings for the optional Jev lane. Your API key does NOT go here: put JEV_API_KEY=... in a file called .env (git-ignored). mode: 'auto' = use Jev if a key is set, else show 'not connected'; 'off' = never call it; 'mock' = fake answers (clearly labelled) for testing the comparison view.",
+  "mode": "auto",
+  "base_url": "https://api.typesafe.ai/v1",
+  "_endpoint": "Fill in from docs.typesafe.ai once you have access, e.g. the path of the structured-output endpoint. Left empty on purpose: I could not confirm it.",
+  "endpoint": "",
+  "model": "jev",
+  "batch_size": 16,
+  "context_beats": 8,
+  "timeout_seconds": 60
+}
