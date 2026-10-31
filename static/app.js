@@ -363,7 +363,8 @@ function drawPosition(ctx, w, h) {
     ctx.fillStyle = C.text;
     ctx.globalAlpha = r.b.chord.source === "chart" ? 1 : 0.35 + 0.65 * r.b.chord.conf;
     ctx.fillRect(Math.round(x0) + 1, 6, 1, 18);
-    clipText(ctx, fmt(r.b.chord.label), x0 + 6, 21, x1 - x0 - 8);
+    const lx = Math.max(x0, 0);  // keep the label visible when the chord began off-screen
+    clipText(ctx, fmt(r.b.chord.label), lx + 6, 21, x1 - lx - 8);
     ctx.globalAlpha = 1;
   }
   if (!chart) return;
@@ -373,7 +374,8 @@ function drawPosition(ctx, w, h) {
     if (x1 < 0 || x0 > w) continue;
     const agree = r.b.detected.root === r.b.chord.root && r.b.detected.quality === r.b.chord.quality;
     ctx.fillStyle = agree ? C.faint : C.disagree;
-    clipText(ctx, fmt(r.v) + " " + pct(r.b.detected.conf), x0 + 6, 44, x1 - x0 - 8);
+    const lx = Math.max(x0, 0);
+    clipText(ctx, fmt(r.v) + " " + pct(r.b.detected.conf), lx + 6, 44, x1 - lx - 8);
   }
 }
 
@@ -391,7 +393,8 @@ function drawHeading(ctx, w, h) {
       ctx.font = k === 0 ? "500 12px -apple-system, Inter, sans-serif" : "11px -apple-system, Inter, sans-serif";
       const full = `${fmt(c.name)}  ${pct(c.w)}`;
       const txt = ctx.measureText(full).width <= span - 6 ? full : fmt(c.name);
-      clipText(ctx, txt, x0 + 6, y + bh - 6, span - 4);
+      const lx = Math.max(x0, 0);
+      clipText(ctx, txt, lx + 6, y + bh - 6, x1 - lx - 7);
     });
   }
 }
