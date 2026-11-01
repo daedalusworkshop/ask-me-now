@@ -65,8 +65,18 @@ def _env_with_ffmpeg():
 INSTALL = {"state": "idle", "log": []}
 
 
-def install_packages():
-    return ["transkun", "setuptools<81", "audioop-lts; python_version>='3.13'"]
+# Transkun's own dependency list includes training-only packages; one of them
+# (ncls) has to be compiled on Windows and fails without Microsoft's C++ tools.
+# Transcribing needs only these (checked by running transkun with the rest blocked):
+TRANSKUN_RUNTIME = ["torch", "torchaudio", "numpy", "moduleconf", "pydub", "soxr", "pretty_midi",
+                    "mir_eval", "scipy", "tqdm",
+                    "setuptools<81",                          # transkun imports pkg_resources
+                    "audioop-lts; python_version>='3.13'"]    # pydub on Python 3.13+
+
+
+def install_commands():
+    pip = [sys.executable, "-m", "pip", "install", "--progress-bar", "off"]
+    return [pip + ["--no-deps", "transkun"], pip + TRANSKUN_RUNTIME]
 
 
 def start_install():
@@ -76,17 +86,21 @@ def start_install():
     INSTALL.update(state="running", log=["Starting… this downloads PyTorch, so it can take 5–15 minutes."])
 
     def work():
-        cmd = [sys.executable, "-m", "pip", "install", "--progress-bar", "off"] + install_packages()
         try:
-            p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
-            for line in p.stdout:
-                line = line.strip()
-                if line:
-                    INSTALL["log"] = (INSTALL["log"] + [line])[-40:]
-            p.wait()
-            ok = p.returncode == 0 and available()
+            code = 0
+            for cmd in install_commands():
+                p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+                for line in p.stdout:
+                    line = line.strip()
+                    if line:
+                        INSTALL["log"] = (INSTALL["log"] + [line])[-40:]
+                code = p.wait()
+                if code:
+                    break
+            ok = code == 0 and available()
             INSTALL["state"] = "done" if ok else "failed"
-            INSTALL["log"].append("Installed. You can now load any recording." if ok else "Install failed (see above).")
+            INSTALL["log"].append("Installed. You can now load any recording." if ok else
+                                  f"Install failed (see above). Python {sys.version.split()[0]}.")
         except Exception as e:  # keep the server alive whatever happens
             INSTALL["state"] = "failed"
             INSTALL["log"].append(f"Install failed: {e}")
@@ -126,3 +140,13 @@ def transcribe(wav, out_mid, log=print):
         os.replace(made[0], out_mid)
         return "basic-pitch"
     raise RuntimeError("NO_TRANSCRIBER: No transcriber is installed, so audio can't be turned into notes yet.")
+
+
+if __name__ == "__main__":
+    # `python -m listening_lab.transcribe --install`: what run.sh / run.bat use
+    if "--install" in sys.argv:
+        for cmd in install_commands():
+            r = subprocess.run(cmd)
+            if r.returncode:
+                sys.exit(r.returncode)
+        print("Transkun installed." if available() else "Transkun didn't install.")

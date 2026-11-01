@@ -29,9 +29,8 @@ fi
 
 if [ "$1" = "--install-transcriber" ]; then
   echo "Installing Transkun (downloads PyTorch; can take a while) …"
-  # Transkun still imports pkg_resources, which newer setuptools removed
-  # and Python 3.13+ needs audioop-lts for pydub, which Transkun uses to read audio
-  if "$VPY" -m pip install transkun "setuptools<81" "audioop-lts; python_version>='3.13'"; then
+  # Installs Transkun plus only what transcribing needs (see listening_lab/transcribe.py)
+  if "$VPY" -m listening_lab.transcribe --install; then
     echo "Transkun installed."
   else
     echo "Transkun failed to install — trying Spotify's Basic Pitch instead …"

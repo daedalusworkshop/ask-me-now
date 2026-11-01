@@ -49,9 +49,8 @@ if defined NEED_INSTALL (
 
 if /i "%~1"=="--install-transcriber" (
   echo Installing Transkun ^(downloads PyTorch; can take a while^) ...
-  rem Transkun still imports pkg_resources, removed in newer setuptools;
-  rem Python 3.13+ also needs audioop-lts for pydub.
-  "%VPY%" -m pip install transkun "setuptools<81" "audioop-lts; python_version>='3.13'"
+  rem Skips Transkun's training-only extras (one of them can't be built on Windows)
+  "%VPY%" -m listening_lab.transcribe --install
   if errorlevel 1 (
     echo Transkun failed to install - trying Spotify's Basic Pitch instead ...
     "%VPY%" -m pip install basic-pitch && echo Basic Pitch installed ^(fallback^).
