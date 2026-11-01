@@ -70,19 +70,33 @@
 
   // ------------------------------------------------------------ sound
   let ac = null, muted = false;
-  function play(seq) {  // seq: [[time_s, [midi...], dur_s], ...]
+  async function play(seq) {  // seq: [[time_s, [midi...], dur_s], ...]
     if (muted || !seq) return;
-    ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+    try {
+      ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+      if (ac.state !== "running") await ac.resume();  // some browsers start it paused
+    } catch (e) { return note("Your browser blocked sound. Click “hear it” again."); }
+    if (ac.state !== "running") return note("Your browser blocked sound. Click “hear it” again.");
+    const out = ac.createGain(); out.gain.value = 0.9; out.connect(ac.destination);
     const t0 = ac.currentTime + 0.05;
+    let end = 0;
     for (const [at, notes, dur] of seq) for (const m of notes) {
-      const o = ac.createOscillator(), g = ac.createGain();
-      o.type = "triangle"; o.frequency.value = 440 * Math.pow(2, (m - 69) / 12);
-      g.gain.setValueAtTime(0, t0 + at);
-      g.gain.linearRampToValueAtTime(0.18 / Math.sqrt(notes.length), t0 + at + 0.01);
-      g.gain.exponentialRampToValueAtTime(0.001, t0 + at + (dur || 1.2));
-      o.connect(g).connect(ac.destination); o.start(t0 + at); o.stop(t0 + at + (dur || 1.2) + 0.05);
+      const d = dur || 1.2, f = 440 * Math.pow(2, (m - 69) / 12), v = 0.32 / Math.sqrt(notes.length);
+      // two oscillators (warm + bright) with a quick attack and a piano-like fade
+      for (const [type, mul, lvl] of [["triangle", 1, 1], ["sine", 2, 0.35]]) {
+        const o = ac.createOscillator(), g = ac.createGain();
+        o.type = type; o.frequency.value = f * mul;
+        g.gain.setValueAtTime(0.0001, t0 + at);
+        g.gain.exponentialRampToValueAtTime(v * lvl, t0 + at + 0.012);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + at + d);
+        o.connect(g).connect(out); o.start(t0 + at); o.stop(t0 + at + d + 0.05);
+      }
+      end = Math.max(end, at + d);
     }
+    const hb = document.querySelector("#explain .ex-hear");
+    if (hb) { hb.textContent = "♪ playing…"; later(end * 1000, () => (hb.textContent = "▶ hear it")); }
   }
+  function note(msg) { const t = document.querySelector("#explain .ex-text"); if (t) t.textContent = msg; }
 
   // ------------------------------------------------------------ the explainers
   const EbM7 = [39, 51, 54, 58, 61];             // E♭m7 with a low E♭ in the bass
@@ -337,6 +351,7 @@
     box.querySelector(".ex-back").disabled = idx === 0;
     box.querySelector(".ex-next").textContent = idx === ex.steps.length - 1 ? "Done" : "Next →";
     box.querySelector(".ex-hear").hidden = !st.sound;
+    box.querySelector(".ex-hear").textContent = "▶ hear it";
     const svg = box.querySelector("svg");
     svg.innerHTML = "";
     st.draw(svg);
