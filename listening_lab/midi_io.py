@@ -89,3 +89,40 @@ def write_midi(notes, path, tempo_bpm=120.0, beats_per_bar=4):
         last = t
         track.append(msg)
     mid.save(path)
+
+
+def offset_to_audio(notes, wav_path, max_shift=2.0, step=0.01):
+    """Seconds to add to a MIDI's times so its note onsets line up with the
+    recording (e.g. a transcription service that trimmed leading silence).
+    Compares the audio's loudness jumps with the MIDI's note starts."""
+    import wave
+
+    import numpy as np
+    w = wave.open(wav_path)
+    sr, ch = w.getframerate(), w.getnchannels()
+    x = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16).astype(float)
+    if ch > 1:
+        x = x.reshape(-1, ch).mean(1)
+    hop = max(1, int(sr * step))
+    energy = np.sqrt(np.add.reduceat(x ** 2, np.arange(0, len(x), hop)) + 1e-9)
+    flux = np.r_[0.0, np.maximum(0.0, np.diff(np.log(energy)))]
+    onsets = np.zeros(len(flux))
+    for s, _e, _p, _v in notes:
+        i = int(round(s / step))
+        if 0 <= i < len(onsets):
+            onsets[i] += 1
+    k = np.ones(3) / 3
+    f = np.convolve(flux - flux.mean(), k, "same")
+    o = np.convolve(onsets - onsets.mean(), k, "same")
+    lags = np.arange(-int(max_shift / step), int(max_shift / step) + 1)
+    score = [float(np.dot(np.roll(o, int(l)), f)) for l in lags]
+    return round(float(lags[int(np.argmax(score))] * step), 3)
+
+
+def shift(notes, info, seconds):
+    """Move every note and beat later by `seconds` (earlier if negative)."""
+    notes = [(max(0.0, s + seconds), max(0.0, e + seconds), p, v) for s, e, p, v in notes]
+    info = dict(info)
+    if info.get("beat_times"):
+        info["beat_times"] = [t + seconds for t in info["beat_times"] if t + seconds >= 0]
+    return notes, info

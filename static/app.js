@@ -652,10 +652,10 @@ function toast(msg) {
   clearTimeout(toast._t); toast._t = setTimeout(() => (t.hidden = true), 9000);
 }
 
-async function api(path, body, raw) {
+async function api(path, body, raw, extraHeaders) {
   const opts = body === undefined ? {} : {
     method: "POST",
-    headers: raw ? { "X-Filename": encodeURIComponent(raw) } : { "Content-Type": "application/json" },
+    headers: raw ? { "X-Filename": encodeURIComponent(raw), ...(extraHeaders || {}) } : { "Content-Type": "application/json" },
     body: raw ? body : JSON.stringify(body),
   };
   const r = await fetch(path, opts);
@@ -729,14 +729,22 @@ function updateJevChip() {
   $("#ask-jev").disabled = !st.connected || !S.data;
 }
 
-async function upload(file) {
-  $("#file-name").textContent = file.name;
-  const isMidi = /\.midi?$/i.test(file.name);
+async function upload(files) {
+  // One file, or a recording plus a MIDI of the same performance: then the
+  // recording is what you hear and the MIDI's notes are what gets analysed.
+  files = [...files];
+  const midiOf = (f) => /\.midi?$/i.test(f.name);
+  const media = files.find((f) => !midiOf(f));
+  const pairMidi = media && files.find(midiOf);
+  const file = media || files[0];
+  $("#file-name").textContent = files.map((f) => f.name).join(" + ");
+  const isMidi = midiOf(file) || !!pairMidi;
   busy(true, `Uploading ${file.name}…`);
   try {
     const up = await api("/api/upload", file, file.name);
+    if (pairMidi) await api("/api/upload", pairMidi, pairMidi.name, { "X-Pair-With": up.upload });
     S.source = { upload: up.upload };
-    if (!isMidi) $("#beat-source").value = "auto";
+    $("#beat-source").value = "auto";
     await analyze({ first_load: true }, isMidi ? "Reading MIDI…" :
       "Extracting audio and transcribing to notes… with Transkun this takes a few minutes for a full tune (it's cached afterwards).");
   } catch (e) { toast(e.message); busy(false); }
@@ -772,7 +780,7 @@ async function init() {
   $("#follow").checked = S.follow;
   buildLaneMenu();
 
-  $("#file").addEventListener("change", (e) => e.target.files[0] && upload(e.target.files[0]));
+  $("#file").addEventListener("change", (e) => e.target.files.length && upload(e.target.files));
   $("#analyze").onclick = () => analyze();
   $("#home").onchange = () => S.data && analyze();
   $("#zoom-in").onclick = () => zoom(1.5);

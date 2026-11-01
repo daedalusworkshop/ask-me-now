@@ -71,7 +71,10 @@ expected results.
 ## Using it
 
 1. **Load something.** Click *Test 1* or *Test 2*, or choose a video, audio or
-   MIDI file.
+   MIDI file. If you have a recording **and** a MIDI of that same performance,
+   select both at once (Ctrl+click). You hear the recording, the analysis uses
+   the MIDI's notes (no transcribing), and the app lines the MIDI up with the
+   audio automatically. Drum tracks in a MIDI are always ignored.
 2. **Paste a chord chart** (optional, but it's your ground truth). It
    overrides the detected chords:
    ```

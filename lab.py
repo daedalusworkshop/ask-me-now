@@ -71,13 +71,21 @@ def session_from_upload(path, filename, log=print):
             TR.extract_audio(path, wav)
         mid = os.path.join(d, "transcribed.mid")
         tag = os.path.join(d, "transcriber.txt")
-        if os.path.exists(mid) and os.path.exists(tag):
+        paired = os.path.join(d, "paired.mid")  # a MIDI of this same recording, uploaded with it
+        if os.path.exists(paired):
+            notes, info = midi_io.read_midi(paired)  # keeps the MIDI's own beat grid
+            off = midi_io.offset_to_audio(notes, wav)
+            notes, info = midi_io.shift(notes, info, off)
+            info["midi_offset"] = off
+            transcriber = f"your MIDI (lined up {off:+.2f}s)" if off else "your MIDI"
+        elif os.path.exists(mid) and os.path.exists(tag):
             transcriber = open(tag).read().strip()
         else:
             transcriber = TR.transcribe(wav, mid, log=log)
             open(tag, "w").write(transcriber)
-        notes, info = midi_io.read_midi(mid)
-        info["has_real_tempo"] = False  # transcriptions have no beat grid
+        if not os.path.exists(paired):
+            notes, info = midi_io.read_midi(mid)
+            info["has_real_tempo"] = False  # transcriptions have no beat grid
         playable = os.path.basename(path)
         if ext in VIDEO_EXT:
             media = {"url": f"/media/{sid}/{playable}", "kind": "video"}
@@ -317,6 +325,16 @@ class Handler(BaseHTTPRequestHandler):
                 if ext not in VIDEO_EXT | AUDIO_EXT | MIDI_EXT | {".mkv", ".avi"}:
                     return self._error(f"Unsupported file type '{ext}'.")
                 data = self._body()
+                pair = self.headers.get("X-Pair-With")
+                if pair:  # a MIDI of an audio/video upload: use its notes instead of transcribing
+                    d = os.path.join(WORK, os.path.basename(pair))
+                    if ext not in MIDI_EXT or not os.path.isdir(d):
+                        return self._error("Pairing needs a MIDI file and an uploaded recording.")
+                    with open(os.path.join(d, "paired.mid"), "wb") as f:
+                        f.write(data)
+                    with LOCK:
+                        SESSIONS.pop(os.path.basename(pair), None)
+                    return self._json({"upload": os.path.basename(pair), "filename": name})
                 sid = "up-" + hashlib.sha1(data).hexdigest()[:12]
                 d = os.path.join(WORK, sid)
                 os.makedirs(d, exist_ok=True)
