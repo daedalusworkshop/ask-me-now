@@ -461,7 +461,13 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     os.makedirs(WORK, exist_ok=True)
-    srv = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
+    try:
+        srv = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
+    except OSError:
+        print(f"\n  Listening Lab is already running (port {PORT} is in use).\n"
+              "  Close the other Listening Lab window first, then start it again.\n"
+              "  (If you can't find it, restarting the computer also works.)\n")
+        sys.exit(1)
     url = f"http://localhost:{PORT}"
     print(f"\n  Listening Lab is running at {url}\n  (press Ctrl+C to stop)\n")
     print(f"  transcriber: {TR.available() or 'none installed (MIDI + tests still work)'}")
