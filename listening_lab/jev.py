@@ -214,7 +214,6 @@ def _call_jev(cfg, payload):
     Returns a list with one dict per beat in payload["answer_for"], each like
     {"chord_root": {"C": 0.1, ...}, ..., "is_arrival": {"yes": .2, "no": .8}}.
     """
-    import time
     state = {
         "about": STATE_NOTE,
         "home_key": _key_long(payload["home_key"]),
@@ -223,22 +222,7 @@ def _call_jev(cfg, payload):
     questions = {}
     for b in payload["answer_for"]:
         questions.update(_questions_for(b))
-    body = json.dumps({"model": cfg.get("model", "jev-latest"), "state": state,
-                       "questions": questions}).encode()
-    url = cfg["base_url"].rstrip("/") + "/" + cfg["endpoint"].lstrip("/")
-    for attempt in range(6):
-        req = urllib.request.Request(url, data=body, method="POST", headers={
-            "Authorization": f"Bearer {api_key()}", "Content-Type": "application/json"})
-        try:
-            with urllib.request.urlopen(req, timeout=float(cfg.get("timeout_seconds", 60))) as r:
-                data = json.loads(r.read())
-            break
-        except urllib.error.HTTPError as e:
-            if e.code in (429, 529) and attempt < 5:  # rate limit / overloaded: back off
-                wait = float(e.headers.get("retry-after") or 2 ** attempt)
-                time.sleep(min(wait, 30))
-                continue
-            raise RuntimeError(f"Jev HTTP {e.code}: {e.read()[:300].decode(errors='replace')}")
+    data = _post(cfg, {"model": cfg.get("model", "jev-latest"), "state": state, "questions": questions})
     ans = data["answers"]
     out = []
     for b in payload["answer_for"]:
@@ -249,6 +233,24 @@ def _call_jev(cfg, payload):
         item["is_arrival"] = {"yes": p, "no": 1.0 - p}
         out.append(item)
     return out
+
+
+def _post(cfg, body):
+    """POST one System One request, retrying on rate limits / overload."""
+    import time
+    data = json.dumps(body).encode()
+    url = cfg["base_url"].rstrip("/") + "/" + cfg["endpoint"].lstrip("/")
+    for attempt in range(6):
+        req = urllib.request.Request(url, data=data, method="POST", headers={
+            "Authorization": f"Bearer {api_key()}", "Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=float(cfg.get("timeout_seconds", 60))) as r:
+                return json.loads(r.read())
+        except urllib.error.HTTPError as e:
+            if e.code in (429, 529) and attempt < 5:
+                time.sleep(min(float(e.headers.get("retry-after") or 2 ** attempt), 30))
+                continue
+            raise RuntimeError(f"Jev HTTP {e.code}: {e.read()[:300].decode(errors='replace')}")
 
 
 def _validate(item):
@@ -288,3 +290,44 @@ def _mock(analysis):
             "is_arrival": peaked(["yes", "no"], "yes" if b["arrival"] > 0 else "no"),
         }))
     return out
+
+
+# ---------------------------------------------------------------- your own rows
+#
+# A row you add in the app is one sentence. For every beat, Jev gets that
+# sentence word for word as a yes/no ("noul") question, and a state that is
+# only data: this beat, the 4 beats before it and the 4 after it. Nothing is
+# added to your wording. The row shows Jev's probability of "yes" per beat.
+
+def custom_state(ctx, i, around=4):
+    return {
+        "this_beat": ctx[i],
+        "beats_before": ctx[max(0, i - around):i],
+        "beats_after": ctx[i + 1:i + 1 + around],
+    }
+
+
+def ask_custom(analysis, notes, texts):
+    """Return {"status": ..., "values": [[P(yes) per beat] per text] or None}."""
+    st = status()
+    if not st["connected"]:
+        return {"status": st, "values": None}
+    if st["mock"]:
+        rng = random.Random(len(texts))
+        return {"status": st, "values": [[rng.random() for _ in analysis["beats"]] for _ in texts]}
+    cfg = load_config()
+    ctx = beat_context(analysis, notes)
+    questions = {f"q{k}": {"type": "noul", "instructions": t} for k, t in enumerate(texts)}
+
+    def one(i):
+        body = {"model": cfg.get("model", "jev-latest"), "state": custom_state(ctx, i), "questions": questions}
+        ans = _post(cfg, body)["answers"]
+        return [float(ans[f"q{k}"]["noul"]) for k in range(len(texts))]
+
+    try:
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=int(cfg.get("parallel_requests", 4)) * 2) as pool:
+            per_beat = list(pool.map(one, range(len(ctx))))
+    except Exception as e:
+        return {"status": {"connected": False, "mock": False, "message": f"error: {e}"}, "values": None}
+    return {"status": st, "values": [[row[k] for row in per_beat] for k in range(len(texts))]}

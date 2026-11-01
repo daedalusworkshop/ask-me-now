@@ -180,6 +180,12 @@ Everything about TypeSafe's Jev is in **`listening_lab/jev.py`** and
 * How it asks: for every beat, Jev gets the chords and notes of the nearby
   beats plus five multiple-choice questions, and returns a probability for
   every option. A whole piece takes a couple of seconds.
+* **Your own rows:** press **+ row** and type any yes/no statement, e.g.
+  *"This beat sounds unresolved."* For every beat, Jev gets your sentence
+  word for word, plus only data: that beat's chord, sounding notes and bass,
+  and the same for the 4 beats before and after. The row shows Jev's
+  probability of "yes" on each beat. Rows are remembered; **delete row**
+  removes one.
 * What it's good and bad at: chord roots are reliable (often better than the
   detector on rootless voicings). Local home tends to stick to the piece's
   home key, and heading is a mixed bag. Read those two lanes as a second

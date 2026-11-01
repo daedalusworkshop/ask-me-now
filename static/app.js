@@ -128,6 +128,63 @@ S.order = load("order", DEFAULT_ORDER).filter((k) => LANES[k]);
 DEFAULT_ORDER.forEach((k) => { if (!S.order.includes(k)) S.order.push(k); });
 S.hidden = new Set(load("hidden", []));
 
+// ---- your own Jev rows: one sentence each, sent to Jev word for word
+S.custom = load("custom", []);  // [{id, text}]
+S.customValues = {};             // id -> [P(yes) per beat] for the loaded piece
+function registerCustom(c) {
+  const id = "custom:" + c.id;
+  LANES[id] = {
+    title: "Jev: " + escapeHtml(c.text.length > 40 ? c.text.slice(0, 40) + "…" : c.text),
+    desc: "“" + escapeHtml(c.text) + "”<br>Jev's probability of yes on each beat.",
+    h: 80, custom: c.id,
+    draw: (ctx, w, h) => {
+      const v = S.customValues[c.id];
+      if (!v) {
+        ctx.fillStyle = C.faint; ctx.font = "14px -apple-system, Inter, sans-serif"; ctx.textBaseline = "middle";
+        ctx.fillText(S.data ? "press “ask Jev” to fill this row" : "load a piece first", 10, h / 2);
+        return;
+      }
+      stepLine(ctx, w, h, (b) => v[b.i], 0, 1, C.sure, 1.5);
+    },
+    axis: (ctx, w, h) => axisNum(ctx, w, h, 0, 1, [0, 0.5, 1]),
+    controls: (el) => {
+      const rm = document.createElement("button");
+      rm.className = "btn"; rm.textContent = "delete row";
+      rm.onclick = () => {
+        S.custom = S.custom.filter((x) => x.id !== c.id); store("custom", S.custom);
+        delete LANES[id]; S.order = S.order.filter((k) => k !== id); store("order", S.order);
+        buildLanes(); buildLaneMenu();
+      };
+      el.appendChild(rm);
+    },
+  };
+  if (!S.order.includes(id)) S.order.push(id);
+}
+function escapeHtml(t) { return t.replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch])); }
+S.custom.forEach(registerCustom);
+S.order = S.order.filter((k) => LANES[k]);
+
+async function askCustom(rows) {
+  if (!S.data || !rows.length) return;
+  const r = await api("/api/jev-custom", { session: S.data.session, questions: rows.map((c) => c.text) });
+  if (!r.values) { toast("Jev: " + r.status.message); return; }
+  rows.forEach((c, k) => { S.customValues[c.id] = r.values[k]; });
+  render();
+}
+
+async function addCustomRow() {
+  const text = prompt("What should Jev judge on every beat? Write a yes/no statement, e.g.\n“This beat sounds unresolved.”\nIt's sent to Jev exactly as you type it.");
+  if (!text || !text.trim()) return;
+  const c = { id: Date.now().toString(36), text: text.trim() };
+  S.custom.push(c); store("custom", S.custom);
+  registerCustom(c); store("order", S.order);
+  buildLanes(); buildLaneMenu();
+  if (S.data && S.status.jev.connected) {
+    busy(true, "Asking Jev on every beat…");
+    try { await askCustom([c]); } catch (e) { toast(e.message); } finally { busy(false); }
+  }
+}
+
 function laneVisible(id) {
   const L = LANES[id];
   if (S.hidden.has(id)) return false;
@@ -197,7 +254,7 @@ function buildLaneMenu() {
   const reset = document.createElement("label");
   reset.textContent = "Reset order and visibility";
   reset.addEventListener("click", () => {
-    S.order = [...DEFAULT_ORDER]; S.hidden = new Set();
+    S.order = [...DEFAULT_ORDER, ...S.custom.map((c) => "custom:" + c.id)]; S.hidden = new Set();
     store("order", S.order); store("hidden", []);
     buildLanes(); buildLaneMenu();
   });
@@ -675,6 +732,7 @@ function params(extra) {
 
 async function analyze(extra, busyText) {
   if (!S.source) return toast("Load a test or a file first.");
+  S.customValues = {};
   busy(true, busyText || "Analysing…");
   try {
     const d = await api("/api/analyze", params(extra));
@@ -760,6 +818,7 @@ async function askJev() {
     S.jev = j.beats ? j : null;
     if (j.status) S.status.jev = j.status;
     updateJevChip(); buildLanes();
+    if (j.beats && S.custom.length) { busy(true, "Asking Jev your own rows…"); await askCustom(S.custom); }
   } catch (e) { toast(e.message); } finally { busy(false); }
 }
 
@@ -783,6 +842,7 @@ async function init() {
     lb.appendChild(b);
   }
   if (!lb.children.length) lb.innerHTML = '<span class="hint">Empty. Put a recording (and its MIDI) in a folder inside <b>library</b>, then reload.</span>';
+  $("#add-row").addEventListener("click", addCustomRow);
   $("#chip-jev").addEventListener("click", async () => {
     const st = S.status.jev;
     if (st.connected) return;

@@ -436,6 +436,16 @@ class Handler(BaseHTTPRequestHandler):
                     f.write("\n".join(lines + [f"JEV_API_KEY={key}"]) + "\n")
                 return self._json({"jev": J.status()})
 
+            if path == "/api/jev-custom":
+                p = json.loads(self._body() or b"{}")
+                sess = SESSIONS.get(p.get("session"))
+                if not sess or "result" not in sess:
+                    return self._error("analyse something first", 404)
+                texts = [t for t in (p.get("questions") or []) if isinstance(t, str) and t.strip()]
+                if not texts:
+                    return self._error("no question")
+                return self._json(J.ask_custom(sess["result"], sess["notes"], texts))
+
             if path == "/api/jev":
                 p = json.loads(self._body() or b"{}")
                 sess = SESSIONS.get(p.get("session"))
