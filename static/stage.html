@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Listening Lab · 3D stage</title>
+<link rel="stylesheet" href="/static/stage.css">
+<script type="importmap">
+{ "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<div id="ui">
+  <div id="panel">
+    <div class="row head"><b id="title">loading…</b> <a href="/" class="dim">← lanes</a></div>
+    <div id="steps"></div>
+    <div class="row">
+      <button id="btn-calib">1 · keyboard corners</button>
+      <button id="btn-track">2 · track hands</button>
+    </div>
+    <div class="row">
+      <button id="btn-label" title="Add a section label at the current time (L)">+ label</button>
+      <button id="btn-cam" title="Switch between the automatic camera and dragging it yourself (C)">camera: auto</button>
+    </div>
+    <details id="look">
+      <summary>look</summary>
+      <label><input type="checkbox" data-show="notes" checked> notes</label>
+      <label><input type="checkbox" data-show="future" checked> future notes (outlines)</label>
+      <label><input type="checkbox" data-show="trails" checked> hand trails</label>
+      <label><input type="checkbox" data-show="skeleton" checked> hand lines on the video</label>
+      <label><input type="checkbox" data-show="labels" checked> labels &amp; times</label>
+      <label><input type="checkbox" data-show="box" checked> box &amp; grid</label>
+      <label class="slider">time stretch <input type="range" id="zs" min="0.15" max="4" step="0.05"></label>
+      <label class="slider">trail glow <input type="range" id="glow" min="0" max="3" step="0.05"></label>
+      <label class="slider">keyboard
+        <select id="range">
+          <option value="88">88 keys (A0–C8)</option>
+          <option value="76">76 keys (E1–G7)</option>
+          <option value="61">61 keys (C2–C7)</option>
+          <option value="49">49 keys (C2–C6)</option>
+        </select>
+      </label>
+    </details>
+    <div id="labels-list"></div>
+    <div class="row">
+      <select id="rec-size" title="Size of the recorded video">
+        <option value="1920x1080">1920×1080 (16:9)</option>
+        <option value="1440x1080">1440×1080 (4:3)</option>
+        <option value="1080x1080">1080×1080 (square)</option>
+        <option value="1080x1350">1080×1350 (4:5 portrait)</option>
+      </select>
+      <button id="btn-rec" title="Plays from the start and records the canvas + sound to a video file">● record</button>
+    </div>
+    <div class="hint">space play · ←/→ 5 s · L label · C camera · H hide this</div>
+  </div>
+  <div id="bar"><div id="bar-fill"></div><div id="bar-marks"></div><span id="bar-time">0:00</span></div>
+</div>
+
+<div id="calib" hidden>
+  <canvas id="calib-canvas"></canvas>
+  <div id="calib-help"></div>
+  <div class="calib-buttons">
+    <button id="calib-reset">start over</button>
+    <button id="calib-done" class="primary">done</button>
+  </div>
+</div>
+
+<div id="busy" hidden><div class="box"><div id="busy-text">Working…</div><div class="track"><div id="busy-fill"></div></div><button id="busy-cancel" hidden>stop</button></div></div>
+<div id="toast" hidden></div>
+<div id="media-host"></div>
+
+<script type="module" src="/static/stage.js"></script>
+</body>
+</html>

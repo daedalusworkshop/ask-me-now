@@ -773,7 +773,9 @@ function showData(first) {
     (info.transcriber ? ` · ${info.transcriber}` : "") + ` · home ${fmt(a.global_home.name)}`;
   $("#export-csv").href = `/api/export/${d.session}.csv`;
   $("#export-json").href = `/api/export/${d.session}.json`;
+  $("#open-stage").href = `/stage?s=${d.session}`;
   $("#export-csv").classList.remove("disabled"); $("#export-json").classList.remove("disabled");
+  $("#open-stage").classList.remove("disabled");
   updateJevChip();
   buildLanes();
   if (first) fit(); else render();
@@ -857,6 +859,7 @@ async function init() {
   $("#chip-trans").textContent = S.status.transcriber ? `transcriber: ${S.status.transcriber}` : "no transcriber (tests + MIDI work)";
   $("#home").innerHTML = `<option value="auto">auto</option>`;
   $("#export-csv").classList.add("disabled"); $("#export-json").classList.add("disabled");
+  $("#open-stage").classList.add("disabled");
   updateJevChip();
   $("#follow").checked = S.follow;
   buildLaneMenu();

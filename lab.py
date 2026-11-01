@@ -208,6 +208,50 @@ def payload(sid, sess, result):
     }
 
 
+# ---------------------------------------------------------------- 3D stage
+
+def get_session(sid):
+    """The session for this id, rebuilt from work/ if the server restarted."""
+    if sid in SESSIONS:
+        return SESSIONS[sid]
+    if sid.startswith("test-") and sid[5:] in testpieces.TESTS:
+        _, sess = session_from_test(sid[5:])
+    elif sid.startswith("lib-"):
+        item = next((i for i in list_library()
+                     if "lib-" + hashlib.sha1(i["id"].encode()).hexdigest()[:12] == sid), None)
+        if not item:
+            return None
+        _, sess = session_from_library(item["id"])
+    else:
+        d = os.path.join(WORK, sid)
+        if not os.path.isdir(d):
+            return None
+        src = [f for f in os.listdir(d) if f.startswith("source")]
+        if not src:
+            return None
+        _, sess = session_from_upload(os.path.join(d, src[0]), open(os.path.join(d, "name.txt")).read())
+    SESSIONS[sid] = sess
+    return sess
+
+
+def stage_payload(sid, sess):
+    """Everything the 3D stage needs: the notes, the media, and what you saved
+    there before (keyboard corners, labels, look settings)."""
+    d = os.path.join(WORK, sid)
+    stage = {}
+    if os.path.exists(os.path.join(d, "stage.json")):
+        with open(os.path.join(d, "stage.json")) as f:
+            stage = json.load(f)
+    notes = sess["notes"]
+    return {
+        "session": sid, "title": sess["title"], "media": sess["media"],
+        "notes": [[round(s, 4), round(e, 4), p, v] for s, e, p, v in notes],
+        "duration": max((e for _, e, _, _ in notes), default=0.0),
+        "stage": stage,
+        "hands": f"/media/{sid}/hands.json" if os.path.exists(os.path.join(d, "hands.json")) else None,
+    }
+
+
 # ---------------------------------------------------------------- export
 
 def export_csv(sess):
@@ -319,6 +363,15 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if path == "/":
                 return self._file(os.path.join(STATIC, "index.html"), "text/html; charset=utf-8")
+            if path == "/stage":
+                return self._file(os.path.join(STATIC, "stage.html"), "text/html; charset=utf-8")
+            m = re.match(r"^/api/piece/([\w-]+)$", path)
+            if m:
+                with LOCK:
+                    sess = get_session(m.group(1))
+                if not sess:
+                    return self._error("That piece isn't loaded. Open it in the main page first.", 404)
+                return self._json(stage_payload(m.group(1), sess))
             if path.startswith("/static/"):
                 f = os.path.normpath(os.path.join(STATIC, path[len("/static/"):]))
                 if not f.startswith(STATIC):
@@ -423,6 +476,20 @@ class Handler(BaseHTTPRequestHandler):
                     sess["params"] = p
                     sess.pop("jev", None)
                 return self._json(payload(sid, sess, result))
+
+            m = re.match(r"^/api/(stage|hands)/([\w-]+)$", path)
+            if m:
+                # 3D stage saves: stage.json (corners, labels, look) and hands.json (hand tracks)
+                d = os.path.join(WORK, m.group(2))
+                if not os.path.isdir(d):
+                    return self._error("unknown piece", 404)
+                data = self._body()
+                if len(data) > (80 << 20):
+                    return self._error("too big")
+                json.loads(data)  # refuse anything that isn't JSON
+                with open(os.path.join(d, m.group(1) + ".json"), "wb") as f:
+                    f.write(data)
+                return self._json({"ok": True})
 
             if path == "/api/jev-key":
                 # Save the TypeSafe key to .env on this computer (git-ignored). Never logged.

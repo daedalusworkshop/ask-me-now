@@ -131,6 +131,100 @@ expected results.
 
 ---
 
+## 3D stage
+
+Press **3D stage** (top right of the lanes) to open the piece as a 3D
+"space-time box": the video becomes a thin slice that slides through time,
+every note you've played piles up behind it as a coloured block, the notes
+still to come wait in front of it as white outlines, and each hand leaves a
+blue (left) or pink (right) trail. A camera flies around it on its own, and
+**● record** saves the whole thing, with sound, as a video file.
+
+### Using it
+
+1. **Keyboard corners** (videos only, once per video). Click the four corners
+   of the keys: front-left, front-right, back-right, back-left. "Front" is the
+   edge nearest the player, "back" is where the keys disappear under the lid.
+   Thin lines then show where the app thinks every white key is, with the C's
+   marked. Drag a corner until they sit on the keys. If the lines are too
+   bunched or too spread out, pick your keyboard size (88 / 76 / 61 / 49) under
+   *look*.
+2. **Track hands** (optional, once per video). The video plays through once,
+   silently, while Google's MediaPipe hand tracker finds 21 points on each hand
+   in every frame. It runs only as fast as your computer can keep up, so this
+   takes roughly as long as the video, or longer on a slow machine. The result is saved
+   in `work/`, so it's instant next time.
+3. **+ label** (or **L**) drops a section name at the current moment ("A
+   section begins", "Back to A"…). Labels stand on top of the box.
+4. **Play** with space. Drag the picture to steer the camera yourself; press
+   **C** to hand it back to the automatic camera. **H** hides the panel.
+5. **● record** plays from the start in the size you pick (16:9, 4:3, square,
+   4:5 portrait), pulls back for an overview at the end, and downloads the
+   video. Chrome saves MP4; if a site refuses the file, convert it with
+   `ffmpeg -i in.mp4 -c:v libx264 -c:a aac out.mp4`.
+
+Pieces with no video (tests, MIDI, audio) get a drawn keyboard instead.
+The page loads three.js and MediaPipe from the internet, so it needs a
+connection.
+
+### How it works, step by step
+
+Everything lives in `static/stage.js`, in sections numbered like this list.
+
+1. **Notes in.** The page asks the server for the piece's notes (start, end,
+   pitch, velocity). These come from the same place as the lanes: your MIDI
+   or the transcription.
+2. **One shared space.** Three directions, and everything is placed with
+   them:
+   * **x = pitch**, left to right like the keyboard.
+   * **y = up/down in the video.** The keys sit in a band at y = 0…3; the
+     player's hands come in from below.
+   * **z = time.** Every second is a fixed distance further along
+     (*time stretch* changes it).
+3. **Lining the video up with the notes.** The four corners you click
+   define a *homography*: a 3×3 matrix that maps any point on the flat
+   keyboard to a pixel in the video, perspective included. Four points are
+   exactly enough to pin it down. With it the app can (a) un-skew the video
+   so the keyboard becomes a perfect rectangle, (b) know which key sits under
+   any pixel, and (c) turn tracked hand points into positions in the box.
+   Key positions: the white keys are equal slices of the width, and each
+   black key sits on the line between two whites.
+4. **The layers.** Each one is drawn on the graphics card and reads the same
+   clock (`uNow`, the current playback time), so nothing has to be rebuilt
+   as the music plays:
+   * **Video slice**: the video in black and white with extra contrast,
+     un-skewed by the homography, at z = now. Dark parts go see-through so the
+     notes behind show through. Near each hand the picture is tinted that
+     hand's colour.
+   * **Notes**: one small box per note at (x of its key, key height, start
+     time). A note that has started is drawn solid in its pitch colour (C red,
+     round the rainbow to B) and grows while it's held. A note that hasn't
+     started yet is drawn as a white outline that gets brighter as it gets
+     close.
+   * **Hand trails**: for each tracked frame, each of the hand's 21 bones is
+     joined to the same bone in the next frame, making a thin ribbon through
+     time. There are tens of thousands of these, each very faint, drawn so
+     that overlapping ones add up. Together they look like coloured smoke.
+     Which hand is which: with two hands, the one lower on the keyboard is
+     the left; with one, it's whichever was last seen nearest.
+   * **Box, grid, ruler, labels**: the outline of the whole piece, a floor
+     line for every C and every few seconds, note names lying on the note
+     sheet, and your section labels on posts along the top.
+5. **The camera.** A list of eight shots (angle, height, distance, look
+   ahead or behind), each held about 9 seconds and blended into the next,
+   always centred on the moving slice. In the last few seconds it pulls back
+   to show the whole piece at once. Because the shot depends only on the
+   playback time, every recording comes out the same.
+6. **Recording.** The browser records the 3D canvas (`captureStream`) and
+   the sound (the media element routed through Web Audio) into one file with
+   `MediaRecorder`.
+
+What's saved per piece, in `work/<piece>/`: `stage.json` (corners, keyboard
+size, labels, look settings) and `hands.json` (the hand points, in video
+coordinates, so moving the corners never means tracking again).
+
+---
+
 ## How each number is computed
 
 All of this is in `listening_lab/analysis.py`. The knobs are collected in
@@ -225,5 +319,6 @@ listening_lab/
   jev.py                the Jev hook
 jev_config.json         Jev settings (no secrets)
 static/                 the page (index.html, app.js, style.css)
+  stage.html/.js/.css   the 3D stage
 work/                   uploads, transcriptions, rendered audio (git-ignored)
 ```
