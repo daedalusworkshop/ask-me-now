@@ -45,6 +45,8 @@ def read_midi(path):
     notes = []
     active = {}
     for t, msg in events:
+        if getattr(msg, "channel", None) == 9:
+            continue  # MIDI channel 10 is drums: hits, not pitches, so leave them out
         if msg.type == "note_on" and msg.velocity > 0:
             active.setdefault((msg.channel, msg.note), []).append((t, msg.velocity))
         elif msg.type in ("note_off", "note_on"):
