@@ -163,17 +163,20 @@ All of this is in `listening_lab/analysis.py`. The knobs are collected in
 
 ## Optional AI lane: Jev
 
-Everything about TypeSafe's Jev is in **`listening_lab/jev.py`** (one
-function to edit: `_call_jev`) and **`jev_config.json`**.
+Everything about TypeSafe's Jev is in **`listening_lab/jev.py`** and
+**`jev_config.json`**. It is connected and working (model `jev-latest`).
 
 * With no API key, the lane says *not connected* and nothing is sent anywhere.
 * To connect, copy `.env.example` to `.env` and paste your key after
-  `JEV_API_KEY=`. `.env` is git-ignored, so the key never goes to GitHub. Then
-  fill in `endpoint` in `jev_config.json` from <https://docs.typesafe.ai> and
-  check that `_call_jev` matches the documented request/response shape. I
-  couldn't reach the docs while building this, so that function is a clearly
-  marked placeholder. Everything around it (the questions, validating and
-  normalising answers, the comparison view) is finished.
+  `JEV_API_KEY=`. `.env` is git-ignored, so the key never goes to GitHub.
+  (Or set `JEV_API_KEY` as an environment variable.)
+* How it asks: for every beat, Jev gets the chords and notes of the nearby
+  beats plus five multiple-choice questions, and returns a probability for
+  every option. A whole piece takes a couple of seconds.
+* What it's good and bad at: chord roots are reliable (often better than the
+  detector on rootless voicings). Local home tends to stick to the piece's
+  home key, and heading is a mixed bag. Read those two lanes as a second
+  opinion, not as ground truth.
 * Press **ask Jev**. Five lanes appear:
   * chord root (12)
   * function (tonic / predominant / dominant / chromatic / other)

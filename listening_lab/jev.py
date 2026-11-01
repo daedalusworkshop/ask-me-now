@@ -160,15 +160,17 @@ def _questions_for(b):
     }
     q[f"b{b['beat']}_local_home"] = {
         "type": "choice",
-        "instructions": f"For {where}: which key feels like home right now, judging from the "
-                        "chords in the few bars around this beat (this can differ from state.home_key "
-                        "during a modulation or a passing ii-V)?",
+        "instructions": f"For {where}: which key is the music in at this point? A key lasts "
+                        "several bars and contains most of the chords in the two bars before and after "
+                        "this beat; it is usually NOT simply the name of the current chord.",
         "criteria": {k: _key_long(k) for k in T.KEY_NAMES},
     }
     q[f"b{b['beat']}_heading"] = {
         "type": "choice",
-        "instructions": f"For {where}: which key is the music heading toward next, i.e. the key "
-                        "this chord most wants to resolve into?",
+        "instructions": f"For {where}: which key's home chord does this chord lead to? A dominant "
+                        "seventh resolves down a fifth (G7 leads to C), a ii chord leads to the key a "
+                        "whole step below (Dm7 leads to C), a tritone substitute resolves down a half "
+                        "step (Db7 leads to C). A home chord leads to its own key.",
         "criteria": {k: _key_long(k) for k in T.KEY_NAMES},
     }
     q[f"b{b['beat']}_is_arrival"] = {

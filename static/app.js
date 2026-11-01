@@ -829,12 +829,13 @@ async function init() {
   window.addEventListener("resize", () => render());
   requestAnimationFrame(tick);
 
-  // ?test=name in the URL loads a test straight away (handy for screenshots)
+  // ?test=name or ?upload=id in the URL loads it straight away (handy for
+  // screenshots); add &jev=1 to ask Jev too.
   const q = new URLSearchParams(location.search);
-  if (q.get("test")) {
-    S.source = { test: q.get("test") };
+  if (q.get("test") || q.get("upload")) {
+    S.source = q.get("test") ? { test: q.get("test") } : { upload: q.get("upload") };
     await analyze({ first_load: true, home_override: q.get("home") ? +q.get("home") : null });
-    if (q.get("mockjev")) await askJev();
+    if (q.get("jev") || q.get("mockjev")) await askJev();
   }
 }
 
