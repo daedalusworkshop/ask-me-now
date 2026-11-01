@@ -382,6 +382,8 @@ class Handler(BaseHTTPRequestHandler):
                 if not f.startswith(WORK):
                     return self._error("bad path", 403)
                 return self._file(f)
+            if path == "/api/install-transcriber":
+                return self._json(TR.INSTALL)
             if path == "/api/status":
                 return self._json({
                     "transcriber": TR.available(),
@@ -476,6 +478,9 @@ class Handler(BaseHTTPRequestHandler):
                     sess["params"] = p
                     sess.pop("jev", None)
                 return self._json(payload(sid, sess, result))
+
+            if path == "/api/install-transcriber":
+                return self._json(TR.start_install())
 
             m = re.match(r"^/api/(stage|hands)/([\w-]+)$", path)
             if m:

@@ -193,8 +193,36 @@ async function askCustom(rows) {
   render();
 }
 
+
+// App-styled replacement for confirm()/prompt(): browser pop-ups are
+// unreadable in some browsers (Arc draws white text on white).
+function ask(message, { input = false, ok = "OK", cancel = "Cancel", placeholder = "" } = {}) {
+  return new Promise((resolve) => {
+    const d = document.createElement("div");
+    d.className = "ask-back";
+    d.innerHTML = `<div class="ask-card"><p class="ask-msg"></p>${input ? '<input class="ask-in" type="text">' : ""}
+      <div class="ask-btns"><button class="btn ask-no"></button><button class="btn primary ask-yes"></button></div></div>`;
+    d.querySelector(".ask-msg").textContent = message;
+    d.querySelector(".ask-yes").textContent = ok;
+    d.querySelector(".ask-no").textContent = cancel;
+    const inp = d.querySelector(".ask-in");
+    if (inp) inp.placeholder = placeholder;
+    const done = (v) => { d.remove(); resolve(v); };
+    d.querySelector(".ask-yes").onclick = () => done(input ? inp.value : true);
+    d.querySelector(".ask-no").onclick = () => done(input ? null : false);
+    d.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") d.querySelector(".ask-yes").click();
+      if (e.key === "Escape") d.querySelector(".ask-no").click();
+      e.stopPropagation();
+    });
+    document.body.appendChild(d);
+    (inp || d.querySelector(".ask-yes")).focus();
+  });
+}
+
 async function addCustomRow() {
-  const text = prompt("What should Jev judge on every beat? Write a yes/no statement, e.g.\n“This beat sounds unresolved.”\nIt's sent to Jev exactly as you type it.");
+  const text = await ask("What should Jev judge on every beat? Write a yes/no statement. It's sent to Jev exactly as you type it.",
+    { input: true, ok: "Add row", placeholder: "This beat sounds unresolved." });
   if (!text || !text.trim()) return;
   const c = { id: Date.now().toString(36), text: text.trim() };
   S.custom.push(c); store("custom", S.custom);
@@ -822,8 +850,34 @@ async function analyze(extra, busyText) {
     }
     showData(first);
   } catch (e) {
+    if (/NO_TRANSCRIBER/.test(e.message)) { busy(false); return offerInstall(() => analyze(extra, busyText)); }
     toast(e.message);
   } finally { busy(false); }
+}
+
+// One-click install of the audio-to-notes transcriber (Transkun), then retry.
+async function offerInstall(then) {
+  if (!(await ask("To turn a recording into notes, the app needs a free transcriber (Transkun).\n\n" +
+               "Install it now? It's a one-time download of about 1 GB and takes 5–15 minutes.\n" +
+               "(Or load a MIDI of the same recording together with it instead.)", { ok: "Install", cancel: "Not now" }))) return;
+  try {
+    await api("/api/install-transcriber", {});
+    busy(true, "Installing the transcriber… (one time, 5–15 minutes)");
+    let st;
+    for (;;) {
+      await new Promise((r) => setTimeout(r, 2000));
+      st = await api("/api/install-transcriber");
+      const last = (st.log || []).slice(-1)[0] || "";
+      $("#busy-text").textContent = "Installing the transcriber… (one time, 5–15 minutes)\n" + last.slice(0, 120);
+      if (st.state !== "running") break;
+    }
+    busy(false);
+    if (st.state !== "done") return toast("The install didn't work:\n" + (st.log || []).slice(-6).join("\n"));
+    S.status = await api("/api/status");
+    $("#chip-trans").textContent = "transcriber: " + S.status.transcriber;
+    toast("Transcriber installed.");
+    if (then) then();
+  } catch (e) { busy(false); toast(e.message); }
 }
 
 function showData(first) {
@@ -929,7 +983,8 @@ async function init() {
   $("#chip-jev").addEventListener("click", async () => {
     const st = S.status.jev;
     if (st.connected) return;
-    const key = prompt("Paste your TypeSafe API key (from console.typesafe.ai/keys). It's saved only on this computer.");
+    const key = await ask("Paste your TypeSafe API key (from console.typesafe.ai/keys). It's saved only on this computer.",
+      { input: true, ok: "Save key", placeholder: "apikey_…" });
     if (!key) return;
     try {
       const r = await api("/api/jev-key", { key });
@@ -937,7 +992,8 @@ async function init() {
       toast(r.jev.connected ? "Jev connected." : "Jev: " + r.jev.message);
     } catch (e) { toast(e.message); }
   });
-  $("#chip-trans").textContent = S.status.transcriber ? `transcriber: ${S.status.transcriber}` : "no transcriber (tests + MIDI work)";
+  $("#chip-trans").textContent = S.status.transcriber ? `transcriber: ${S.status.transcriber}` : "no transcriber · click to install";
+  $("#chip-trans").addEventListener("click", () => { if (!S.status.transcriber && !S.data) offerInstall(); });
   $("#home").innerHTML = `<option value="auto">auto</option>`;
   $("#export-csv").classList.add("disabled"); $("#export-json").classList.add("disabled");
   $("#open-stage").classList.add("disabled");

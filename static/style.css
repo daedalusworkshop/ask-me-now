@@ -166,3 +166,11 @@ input[type=checkbox] { accent-color: #ddd; }
 .ex-foot { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; color: var(--dim); font-size: 14px; }
 .ex-btns { display: flex; gap: 6px; flex-wrap: wrap; }
 .ex-btns [hidden] { display: none; }
+
+/* ---- app dialogs (instead of browser pop-ups) */
+.ask-back { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: flex; align-items: center; justify-content: center; z-index: 60; padding: 16px; }
+.ask-card { background: #111; border: 1px solid #333; border-radius: 12px; padding: 20px 22px; width: min(520px, 100%); }
+.ask-msg { white-space: pre-wrap; font-size: 16px; line-height: 1.5; margin: 0 0 14px; }
+.ask-in { width: 100%; padding: 9px 10px; background: #000; border: 1px solid #444; border-radius: 6px; margin-bottom: 14px; }
+.ask-btns { display: flex; justify-content: flex-end; gap: 8px; }
+.ask-btns .primary { background: #e8e8e8; color: #000; border-color: #e8e8e8; }

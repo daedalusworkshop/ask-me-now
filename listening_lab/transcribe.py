@@ -32,9 +32,67 @@ def extract_audio(src, dst_wav, sr=44100):
 
 
 def _bin(name):
-    """Find a console script in this venv first, then on PATH."""
-    here = os.path.join(os.path.dirname(sys.executable), name)
-    return here if os.path.exists(here) else shutil.which(name)
+    """Find a console script in this venv first, then on PATH.
+    (On Windows the script is name.exe next to python.exe in .venv/Scripts.)"""
+    folder = os.path.dirname(sys.executable)
+    for cand in (name, name + ".exe"):
+        here = os.path.join(folder, cand)
+        if os.path.exists(here):
+            return here
+    return shutil.which(name)
+
+
+def _env_with_ffmpeg():
+    """Transkun reads audio through pydub, which looks for a program called
+    'ffmpeg'. If there isn't one on PATH, expose our bundled copy under that name."""
+    env = dict(os.environ)
+    if shutil.which("ffmpeg"):
+        return env
+    src = ffmpeg_exe()
+    if not src:
+        return env
+    bindir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "work", "bin")
+    os.makedirs(bindir, exist_ok=True)
+    dst = os.path.join(bindir, "ffmpeg.exe" if os.name == "nt" else "ffmpeg")
+    if not os.path.exists(dst):
+        shutil.copyfile(src, dst)
+        os.chmod(dst, 0o755)
+    env["PATH"] = bindir + os.pathsep + env.get("PATH", "")
+    return env
+
+
+# ---- one-click install from the app (runs pip in the background)
+INSTALL = {"state": "idle", "log": []}
+
+
+def install_packages():
+    return ["transkun", "setuptools<81", "audioop-lts; python_version>='3.13'"]
+
+
+def start_install():
+    import threading
+    if INSTALL["state"] == "running":
+        return INSTALL
+    INSTALL.update(state="running", log=["Starting… this downloads PyTorch, so it can take 5–15 minutes."])
+
+    def work():
+        cmd = [sys.executable, "-m", "pip", "install", "--progress-bar", "off"] + install_packages()
+        try:
+            p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+            for line in p.stdout:
+                line = line.strip()
+                if line:
+                    INSTALL["log"] = (INSTALL["log"] + [line])[-40:]
+            p.wait()
+            ok = p.returncode == 0 and available()
+            INSTALL["state"] = "done" if ok else "failed"
+            INSTALL["log"].append("Installed. You can now load any recording." if ok else "Install failed (see above).")
+        except Exception as e:  # keep the server alive whatever happens
+            INSTALL["state"] = "failed"
+            INSTALL["log"].append(f"Install failed: {e}")
+
+    threading.Thread(target=work, daemon=True).start()
+    return INSTALL
 
 
 def available():
@@ -52,7 +110,7 @@ def transcribe(wav, out_mid, log=print):
         device = os.environ.get("TRANSKUN_DEVICE", "cpu")
         log(f"Transcribing with Transkun on {device} (a few minutes for a full tune)…")
         r = subprocess.run([_bin("transkun"), wav, out_mid, "--device", device],
-                           capture_output=True, text=True)
+                           capture_output=True, text=True, env=_env_with_ffmpeg())
         if r.returncode != 0 or not os.path.exists(out_mid):
             raise RuntimeError("Transkun failed:\n" + (r.stderr or r.stdout)[-1200:])
         return "transkun"
@@ -61,14 +119,10 @@ def transcribe(wav, out_mid, log=print):
         outdir = os.path.dirname(out_mid)
         for old in glob.glob(os.path.join(outdir, "*_basic_pitch.mid")):
             os.remove(old)
-        r = subprocess.run([_bin("basic-pitch"), outdir, wav], capture_output=True, text=True)
+        r = subprocess.run([_bin("basic-pitch"), outdir, wav], capture_output=True, text=True, env=_env_with_ffmpeg())
         made = glob.glob(os.path.join(outdir, "*_basic_pitch.mid"))
         if r.returncode != 0 or not made:
             raise RuntimeError("Basic Pitch failed:\n" + (r.stderr or r.stdout)[-1200:])
         os.replace(made[0], out_mid)
         return "basic-pitch"
-    cmd = "run.bat --install-transcriber" if os.name == "nt" else "./run.sh --install-transcriber"
-    raise RuntimeError(
-        "No transcriber is installed, so audio can't be turned into notes yet.\n"
-        f"Stop the app and run:  {cmd}\n"
-        "(Or load a MIDI of the same recording with it.)")
+    raise RuntimeError("NO_TRANSCRIBER: No transcriber is installed, so audio can't be turned into notes yet.")

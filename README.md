@@ -49,10 +49,13 @@ of ffmpeg). Later runs start instantly. Your browser opens
 ### Transcribing real recordings (optional, one-time)
 
 Turning audio into notes needs a transcriber. It's a separate step because
-it downloads PyTorch (a few hundred MB on a Mac, several GB on Linux):
+it downloads PyTorch (a few hundred MB on a Mac or Windows, several GB on
+Linux). Easiest: just load a recording. If no transcriber is installed, the
+app offers to install it and shows progress (or click *no transcriber · click
+to install* in the header). From a terminal instead:
 
 ```bash
-./run.sh --install-transcriber
+./run.sh --install-transcriber      # Windows: run.bat --install-transcriber
 ```
 
 This installs [Transkun](https://github.com/Yujia-Yan/Transkun). If that
