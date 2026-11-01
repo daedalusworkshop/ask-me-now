@@ -69,32 +69,48 @@
   }
 
   // ------------------------------------------------------------ sound
-  let ac = null, muted = false;
-  async function play(seq) {  // seq: [[time_s, [midi...], dur_s], ...]
-    if (muted || !seq) return;
-    try {
-      ac = ac || new (window.AudioContext || window.webkitAudioContext)();
-      if (ac.state !== "running") await ac.resume();  // some browsers start it paused
-    } catch (e) { return note("Your browser blocked sound. Click “hear it” again."); }
-    if (ac.state !== "running") return note("Your browser blocked sound. Click “hear it” again.");
-    const out = ac.createGain(); out.gain.value = 0.9; out.connect(ac.destination);
-    const t0 = ac.currentTime + 0.05;
-    let end = 0;
+  // The notes are rendered into a short WAV clip and played with a normal
+  // <audio> element: the same route as the recording, which works in every
+  // browser (live Web Audio is silent in some, e.g. Arc).
+  let muted = false, player = null;
+  function renderWav(seq) {  // seq: [[time_s, [midi...], dur_s], ...]
+    const sr = 22050;
+    const end = Math.max(...seq.map(([at, , d]) => at + (d || 1.2))) + 0.1;
+    const n = Math.ceil(end * sr), buf = new Float32Array(n);
     for (const [at, notes, dur] of seq) for (const m of notes) {
-      const d = dur || 1.2, f = 440 * Math.pow(2, (m - 69) / 12), v = 0.32 / Math.sqrt(notes.length);
-      // two oscillators (warm + bright) with a quick attack and a piano-like fade
-      for (const [type, mul, lvl] of [["triangle", 1, 1], ["sine", 2, 0.35]]) {
-        const o = ac.createOscillator(), g = ac.createGain();
-        o.type = type; o.frequency.value = f * mul;
-        g.gain.setValueAtTime(0.0001, t0 + at);
-        g.gain.exponentialRampToValueAtTime(v * lvl, t0 + at + 0.012);
-        g.gain.exponentialRampToValueAtTime(0.0001, t0 + at + d);
-        o.connect(g).connect(out); o.start(t0 + at); o.stop(t0 + at + d + 0.05);
+      const d = dur || 1.2, f = 440 * Math.pow(2, (m - 69) / 12), v = 0.5 / Math.sqrt(notes.length);
+      const i0 = Math.floor(at * sr), len = Math.floor(d * sr);
+      for (let i = 0; i < len && i0 + i < n; i++) {
+        const t = i / sr, ph = (f * t) % 1;
+        const tri = 4 * Math.abs(ph - 0.5) - 1;                 // warm
+        const sin = Math.sin(2 * Math.PI * 2 * f * t) * 0.35;   // a little brightness
+        const env = Math.min(1, t / 0.012) * Math.exp(-3.2 * t / d);
+        buf[i0 + i] += (tri + sin) * env * v;
       }
-      end = Math.max(end, at + d);
     }
+    let peak = 0; for (const x of buf) peak = Math.max(peak, Math.abs(x));
+    const g = peak > 0.95 ? 0.95 / peak : 1;
+    const bytes = new DataView(new ArrayBuffer(44 + n * 2));
+    const str = (o, t) => [...t].forEach((c, k) => bytes.setUint8(o + k, c.charCodeAt(0)));
+    str(0, "RIFF"); bytes.setUint32(4, 36 + n * 2, true); str(8, "WAVEfmt ");
+    bytes.setUint32(16, 16, true); bytes.setUint16(20, 1, true); bytes.setUint16(22, 1, true);
+    bytes.setUint32(24, sr, true); bytes.setUint32(28, sr * 2, true); bytes.setUint16(32, 2, true);
+    bytes.setUint16(34, 16, true); str(36, "data"); bytes.setUint32(40, n * 2, true);
+    for (let i = 0; i < n; i++) bytes.setInt16(44 + i * 2, Math.max(-1, Math.min(1, buf[i] * g)) * 32767, true);
+    return URL.createObjectURL(new Blob([bytes], { type: "audio/wav" }));
+  }
+  function play(seq) {
+    if (muted || !seq) return;
+    stopSound();
+    player = new Audio(renderWav(seq));
     const hb = document.querySelector("#explain .ex-hear");
-    if (hb) { hb.textContent = "♪ playing…"; later(end * 1000, () => (hb.textContent = "▶ hear it")); }
+    player.onplaying = () => hb && (hb.textContent = "♪ playing…");
+    player.onended = () => hb && (hb.textContent = "▶ hear it");
+    player.play().catch(() => note("Your browser blocked sound. Click “hear it” again."));
+  }
+  function stopSound() {
+    if (!player) return;
+    player.pause(); URL.revokeObjectURL(player.src); player = null;
   }
   function note(msg) { const t = document.querySelector("#explain .ex-text"); if (t) t.textContent = msg; }
 
@@ -377,7 +393,7 @@
         </div>
       </div>`;
     document.body.appendChild(d);
-    const close = () => { clearTimers(); d.hidden = true; };
+    const close = () => { clearTimers(); stopSound(); d.hidden = true; };
     const muteLabel = () => (d.querySelector(".ex-mute").textContent = muted ? "sound off" : "sound on");
     muteLabel();
     d.addEventListener("click", (e) => { if (e.target === d) close(); });
