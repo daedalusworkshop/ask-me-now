@@ -30,6 +30,12 @@ Then, in the project folder:
 ./run.sh
 ```
 
+**On Windows:** double-click **`run.bat`** in the project folder instead (no
+terminal needed). It does exactly the same thing. If Windows says Python is
+missing, install it from <https://www.python.org/downloads/> and tick
+"Add python.exe to PATH" during setup. To use the options below, open the
+folder, type `cmd` in the address bar, and run e.g. `run.bat --install-transcriber`.
+
 The first run takes a minute: it creates a private Python environment in
 `.venv/` and installs three small packages (numpy, mido, and a bundled copy
 of ffmpeg). Later runs start instantly. Your browser opens
