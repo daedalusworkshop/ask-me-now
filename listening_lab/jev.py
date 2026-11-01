@@ -11,11 +11,9 @@ Everything about Jev lives in this file plus `jev_config.json`.
 Where the key goes: put  JEV_API_KEY=...  in a file named `.env` in the
 project folder (it is git-ignored), or set it as an environment variable.
 
-THE ONE FUNCTION TO EDIT is `_call_jev()`. I wrote it without access to
-Jev's docs (they weren't reachable from where this was built), so the
-request/response *shape* is a placeholder: match it to docs.typesafe.ai
-once you have access. Everything around it (what we ask, how answers are
-checked, normalised and compared) is done and doesn't need to change.
+`_call_jev()` talks to POST https://api.typesafe.ai/v1/systemone (see
+docs.typesafe.ai/api/system-one): Bearer key, a JSON `state`, and named
+typed questions (choice / noul). Answers come back with probabilities.
 
 Each beat gets these typed outputs, each a probability distribution:
     chord_root      12 options   C, Db, D, ... B
@@ -111,6 +109,75 @@ def beat_context(analysis, notes):
 
 
 # ---------------------------------------------------------------- the hook
+#
+# How Jev works (docs.typesafe.ai): one POST to /v1/systemone carries a
+# `state` (any JSON) plus a dict of named, typed `questions`. Each answer
+# comes back under the same name. A "choice" answer has a `probabilities`
+# dict over the options we defined; a "noul" answer is P(yes) in 0..1.
+# Jev is good at short, literal judgments, so every beat gets its own five
+# questions that name the beat directly, and the state holds only the beats
+# near it (docs: "send only what the question needs").
+
+PC_LONG = {"C": "C", "Db": "D-flat / C-sharp", "D": "D", "Eb": "E-flat / D-sharp",
+           "E": "E", "F": "F", "F#": "F-sharp / G-flat", "G": "G",
+           "Ab": "A-flat / G-sharp", "A": "A", "Bb": "B-flat / A-sharp", "B": "B"}
+
+FUNCTION_TEXT = {
+    "tonic": "the home chord or a stand-in for it (I, vi, iii in major; i, III in minor)",
+    "predominant": "leads toward the dominant (ii, IV; iv or bVI in minor)",
+    "dominant": "wants to resolve home (V, V7, vii-dim, or the tritone sub bII7)",
+    "chromatic": "outside the home key: a secondary dominant, a ii-V into another key, a passing chord",
+    "other": "no clear chord or function on this beat (silence, a single note, a fill)",
+}
+
+STATE_NOTE = (
+    "Solo jazz piano, transcribed to notes and cut into beats. Each beat lists the "
+    "chord label (from a chord chart if chord_source is 'chart', otherwise guessed "
+    "by a simple detector that often misreads rootless jazz voicings), every note "
+    "sounding on that beat, and the lowest note (bass). home_key is the key of the "
+    "whole piece."
+)
+
+
+def _key_long(k):
+    return PC_LONG[k[:-1]] + " minor" if k.endswith("m") else PC_LONG[k] + " major"
+
+
+def _questions_for(b):
+    """The five typed questions for one beat, named b<beat>_<field>."""
+    where = f"beat {b['beat']} (bar {b['bar']}, beat {b['beat_in_bar']} of the bar) in state.beats"
+    q = {}
+    q[f"b{b['beat']}_chord_root"] = {
+        "type": "choice",
+        "instructions": f"For {where}: what is the root of the chord being played? Judge from the "
+                        "sounding notes and bass as a jazz pianist would, not only from the label.",
+        "criteria": {pc: f"root is {PC_LONG[pc]}" for pc in T.PC_NAMES},
+    }
+    q[f"b{b['beat']}_chord_function"] = {
+        "type": "choice",
+        "instructions": f"For {where}: what job does this chord do relative to state.home_key?",
+        "criteria": dict(FUNCTION_TEXT),
+    }
+    q[f"b{b['beat']}_local_home"] = {
+        "type": "choice",
+        "instructions": f"For {where}: which key feels like home right now, judging from the "
+                        "chords in the few bars around this beat (this can differ from state.home_key "
+                        "during a modulation or a passing ii-V)?",
+        "criteria": {k: _key_long(k) for k in T.KEY_NAMES},
+    }
+    q[f"b{b['beat']}_heading"] = {
+        "type": "choice",
+        "instructions": f"For {where}: which key is the music heading toward next, i.e. the key "
+                        "this chord most wants to resolve into?",
+        "criteria": {k: _key_long(k) for k in T.KEY_NAMES},
+    }
+    q[f"b{b['beat']}_is_arrival"] = {
+        "type": "noul",
+        "instructions": f"For {where}: this beat is a point of arrival, where a chord progression "
+                        "resolves (e.g. the chord after a V7, or the end of a phrase).",
+    }
+    return q
+
 
 def ask_jev(analysis, notes):
     """Return {"status": {...}, "beats": [per-beat answers] or None}."""
@@ -118,58 +185,69 @@ def ask_jev(analysis, notes):
     if not st["connected"]:
         return {"status": st, "beats": None}
     cfg = load_config()
-    ctx = beat_context(analysis, notes)
     if st["mock"]:
         return {"status": st, "beats": _mock(analysis)}
-    answers = []
-    size = int(cfg.get("batch_size", 16))
-    window = int(cfg.get("context_beats", 8))
+    ctx = beat_context(analysis, notes)
+    home = analysis["global_home"]["name"]
+    size = int(cfg.get("batch_size", 8))
+    window = int(cfg.get("context_beats", 12))
+    jobs = []
+    for start in range(0, len(ctx), size):
+        batch = list(range(start, min(len(ctx), start + size)))
+        lo, hi = max(0, batch[0] - window), min(len(ctx), batch[-1] + window + 1)
+        jobs.append((batch, {"home_key": home, "context": ctx[lo:hi],
+                             "answer_for": [ctx[i] for i in batch]}))
     try:
-        for start in range(0, len(ctx), size):
-            batch = list(range(start, min(len(ctx), start + size)))
-            lo, hi = max(0, batch[0] - window), min(len(ctx), batch[-1] + window + 1)
-            raw = _call_jev(cfg, {
-                "question": QUESTION,
-                "context": ctx[lo:hi],
-                "answer_for_beats": batch,
-                "outputs": OPTIONS,
-            })
-            for i, item in zip(batch, raw):
-                answers.append(_validate(item))
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=int(cfg.get("parallel_requests", 4))) as pool:
+            results = list(pool.map(lambda j: _call_jev(cfg, j[1]), jobs))
     except Exception as e:  # keep the app usable whatever goes wrong
         return {"status": {"connected": False, "mock": False, "message": f"error: {e}"}, "beats": None}
+    answers = [_validate(item) for raw in results for item in raw]
     return {"status": st, "beats": answers}
 
 
 def _call_jev(cfg, payload):
-    """>>> EDIT THIS to match docs.typesafe.ai. <<<
+    """One System One request for a batch of beats.
 
-    Must return a list with one dict per beat in payload["answer_for_beats"],
-    each like {"chord_root": {"C": 0.1, ...}, "chord_function": {...},
-    "local_home": {...}, "heading": {...}, "is_arrival": {"yes": .2, "no": .8}}.
+    Returns a list with one dict per beat in payload["answer_for"], each like
+    {"chord_root": {"C": 0.1, ...}, ..., "is_arrival": {"yes": .2, "no": .8}}.
     """
-    body = {
-        "model": cfg.get("model", "jev"),
-        "input": payload,
-        # Typed outputs: one categorical distribution per field, per beat.
-        "output_schema": {
-            "type": "array",
-            "items": {name: {"type": "distribution", "options": opts} for name, opts in OPTIONS.items()},
-        },
+    import time
+    state = {
+        "about": STATE_NOTE,
+        "home_key": _key_long(payload["home_key"]),
+        "beats": payload["context"],
     }
-    req = urllib.request.Request(
-        cfg["base_url"].rstrip("/") + "/" + cfg["endpoint"].lstrip("/"),
-        data=json.dumps(body).encode(),
-        headers={"Authorization": f"Bearer {api_key()}", "Content-Type": "application/json"},
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=float(cfg.get("timeout_seconds", 60))) as r:
-            data = json.loads(r.read())
-    except urllib.error.HTTPError as e:
-        raise RuntimeError(f"HTTP {e.code}: {e.read()[:300].decode(errors='replace')}")
-    # Adjust this line to wherever the per-beat answers sit in the response.
-    return data.get("output") or data.get("answers") or data
+    questions = {}
+    for b in payload["answer_for"]:
+        questions.update(_questions_for(b))
+    body = json.dumps({"model": cfg.get("model", "jev-latest"), "state": state,
+                       "questions": questions}).encode()
+    url = cfg["base_url"].rstrip("/") + "/" + cfg["endpoint"].lstrip("/")
+    for attempt in range(6):
+        req = urllib.request.Request(url, data=body, method="POST", headers={
+            "Authorization": f"Bearer {api_key()}", "Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=float(cfg.get("timeout_seconds", 60))) as r:
+                data = json.loads(r.read())
+            break
+        except urllib.error.HTTPError as e:
+            if e.code in (429, 529) and attempt < 5:  # rate limit / overloaded: back off
+                wait = float(e.headers.get("retry-after") or 2 ** attempt)
+                time.sleep(min(wait, 30))
+                continue
+            raise RuntimeError(f"Jev HTTP {e.code}: {e.read()[:300].decode(errors='replace')}")
+    ans = data["answers"]
+    out = []
+    for b in payload["answer_for"]:
+        item = {}
+        for name in ("chord_root", "chord_function", "local_home", "heading"):
+            item[name] = ans[f"b{b['beat']}_{name}"]["probabilities"]
+        p = float(ans[f"b{b['beat']}_is_arrival"]["noul"])
+        item["is_arrival"] = {"yes": p, "no": 1.0 - p}
+        out.append(item)
+    return out
 
 
 def _validate(item):
