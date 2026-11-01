@@ -5,10 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Listening Lab</title>
 <link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="/static/tabs.css">
 </head>
 <body>
 <header id="top">
   <div class="brand">Listening Lab</div>
+  <nav id="tabs">
+    <button class="tab on" data-tab="lanes">Lanes</button>
+    <a class="tab disabled" id="open-stage" data-tab="stage" title="The piece as a 3D space-time sculpture: video, notes and hand trails">3D stage</a>
+  </nav>
   <div id="title" class="title">nothing loaded</div>
   <div class="chips">
     <span id="chip-trans" class="chip"></span>
@@ -73,7 +78,6 @@
     </div>
     <button class="btn" id="ask-jev">ask Jev</button>
     <button class="btn" id="add-row" title="Add your own row: a sentence Jev judges on every beat">+ row</button>
-    <a class="btn" id="open-stage" target="_blank" title="The piece as a 3D space-time sculpture: video, notes and hand trails">3D stage</a>
     <a class="btn" id="export-csv">CSV</a>
     <a class="btn" id="export-json">JSON</a>
   </div>
@@ -91,10 +95,12 @@
 </main>
 
 <footer id="readout">—</footer>
+<section id="stage-tab" hidden><iframe id="stage-frame" title="3D stage"></iframe></section>
 <div id="busy" hidden><div class="busy-box"><div class="spinner"></div><div id="busy-text">Working…</div></div></div>
 <div id="toast" hidden></div>
 
 <script src="/static/explain.js"></script>
 <script src="/static/app.js"></script>
+<script src="/static/tabs.js"></script>
 </body>
 </html>

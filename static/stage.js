@@ -1027,6 +1027,10 @@ function updateBar(now) {
 }
 
 function wire() {
+  if (window.parent !== window) {
+    // shown as a tab inside the lanes page: "← lanes" switches tabs instead of navigating
+    $(".row.head a").onclick = (e) => { e.preventDefault(); window.parent.postMessage("show-lanes", location.origin); };
+  }
   $("#btn-calib").onclick = openCalib;
   $("#btn-track").onclick = trackHands;
   $("#btn-label").onclick = addLabel;
