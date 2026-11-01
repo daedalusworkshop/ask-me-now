@@ -16,7 +16,17 @@
     if (stage) {
       pauseAll(document);
       const url = document.getElementById("open-stage").getAttribute("href");
-      if (url && frame.getAttribute("src") !== url) frame.setAttribute("src", url);
+      if (url && frame.getAttribute("src") !== url) {
+        frame.setAttribute("src", url);
+        // An app window started before an update still runs the old server, which has no 3D stage.
+        fetch("/stage").then((r) => {
+          if (r.status !== 404) return;
+          frame.removeAttribute("src");
+          frame.srcdoc = '<body style="background:#000;color:#e8e8e8;font:16px/1.5 sans-serif;padding:40px">' +
+            "<b>The app needs a restart to show the 3D stage.</b><br>" +
+            "Close the Listening Lab window (the one with the server text), then start it again with run.bat or run.sh.</body>";
+        }).catch(() => {});
+      }
       const top = document.getElementById("top").getBoundingClientRect().bottom;
       document.documentElement.style.setProperty("--stage-top", top + "px");
     } else if (frame.contentDocument) {
