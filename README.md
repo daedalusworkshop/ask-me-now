@@ -36,9 +36,10 @@ missing, install it from <https://www.python.org/downloads/> and tick
 "Add python.exe to PATH" during setup. To use the options below, open the
 folder, type `cmd` in the address bar, and run e.g. `run.bat --install-transcriber`.
 
-**Updating on Windows:** double-click **`update.bat`**. It downloads the newest
-version from GitHub and copies it over the app, leaving your `library`
-folder, your key and your settings alone.
+**Updating on Windows:** automatic. Every time `run.bat` starts, it fetches
+the newest version from GitHub first (via `update.bat`), leaving your
+`library` folder, your key and your settings alone. Offline, it just starts
+the version you have.
 
 The first run takes a minute: it creates a private Python environment in
 `.venv/` and installs three small packages (numpy, mido, and a bundled copy

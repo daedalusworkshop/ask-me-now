@@ -3,8 +3,17 @@ rem Listening Lab - Windows launcher. Double-click this file to start the app.
 rem   run.bat                        start the app (first run installs what it needs)
 rem   run.bat --install-transcriber  also install Transkun (falls back to Basic Pitch)
 rem   run.bat --selftest             print the test-mode report in this window
+rem   run.bat --no-update            start without checking for a newer version
 setlocal
 cd /d "%~dp0"
+
+rem ---- Get the latest version first (skipped if offline). update.bat restarts
+rem ---- this file afterwards with --no-update, so a new run.bat is used straight away.
+if /i "%~1"=="--no-update" (
+  shift
+) else (
+  if exist "update.bat" "%~dp0update.bat" --then-run %1
+)
 
 rem ---- Find Python 3 (the "py" launcher first, then "python") ----
 set "PY="
