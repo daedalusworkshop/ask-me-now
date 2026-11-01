@@ -822,8 +822,34 @@ async function analyze(extra, busyText) {
     }
     showData(first);
   } catch (e) {
+    if (/NO_TRANSCRIBER/.test(e.message)) { busy(false); return offerInstall(() => analyze(extra, busyText)); }
     toast(e.message);
   } finally { busy(false); }
+}
+
+// One-click install of the audio-to-notes transcriber (Transkun), then retry.
+async function offerInstall(then) {
+  if (!confirm("To turn a recording into notes, the app needs a free transcriber (Transkun).\n\n" +
+               "Install it now? It's a one-time download of about 1 GB and takes 5–15 minutes.\n" +
+               "(Or load a MIDI of the same recording together with it instead.)")) return;
+  try {
+    await api("/api/install-transcriber", {});
+    busy(true, "Installing the transcriber… (one time, 5–15 minutes)");
+    let st;
+    for (;;) {
+      await new Promise((r) => setTimeout(r, 2000));
+      st = await api("/api/install-transcriber");
+      const last = (st.log || []).slice(-1)[0] || "";
+      $("#busy-text").textContent = "Installing the transcriber… (one time, 5–15 minutes)\n" + last.slice(0, 120);
+      if (st.state !== "running") break;
+    }
+    busy(false);
+    if (st.state !== "done") return toast("The install didn't work:\n" + (st.log || []).slice(-6).join("\n"));
+    S.status = await api("/api/status");
+    $("#chip-trans").textContent = "transcriber: " + S.status.transcriber;
+    toast("Transcriber installed.");
+    if (then) then();
+  } catch (e) { busy(false); toast(e.message); }
 }
 
 function showData(first) {
@@ -935,7 +961,8 @@ async function init() {
       toast(r.jev.connected ? "Jev connected." : "Jev: " + r.jev.message);
     } catch (e) { toast(e.message); }
   });
-  $("#chip-trans").textContent = S.status.transcriber ? `transcriber: ${S.status.transcriber}` : "no transcriber (tests + MIDI work)";
+  $("#chip-trans").textContent = S.status.transcriber ? `transcriber: ${S.status.transcriber}` : "no transcriber · click to install";
+  $("#chip-trans").addEventListener("click", () => { if (!S.status.transcriber && !S.data) offerInstall(); });
   $("#home").innerHTML = `<option value="auto">auto</option>`;
   $("#export-csv").classList.add("disabled"); $("#export-json").classList.add("disabled");
   updateJevChip();
