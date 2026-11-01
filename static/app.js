@@ -52,9 +52,29 @@ function detAnswer(b, field) {
 
 const LANES = {
   roll: {
-    title: "Piano roll", h: 150,
-    desc: "Every note. Height is pitch, brightness is how hard it was played.",
+    title: "Notes", h: 150, mode: "both",
+    desc: "Every note played. Higher = higher pitch, brighter = played harder.",
     draw: drawRoll, axis: axisRoll,
+  },
+  s_chord: {
+    title: "Chord", h: 44, mode: "simple", info: "chord",
+    desc: "The chord being played on each beat.",
+    draw: drawSimpleChord,
+  },
+  s_key: {
+    title: "Key right now", h: 44, mode: "simple", info: "key",
+    desc: "The key the music sounds like it's in at this moment. Orange = the song's home key.",
+    draw: drawSimpleKey,
+  },
+  s_tension: {
+    title: "Tension", h: 110, mode: "simple", info: "tension",
+    desc: "How far the music is pulling away from home. Low = heading home, high = far away.",
+    draw: drawSimpleTension, axis: axisTension,
+  },
+  s_home: {
+    title: "Lands home", h: 60, mode: "simple", info: "home",
+    desc: "Moments the music arrives home. Taller = clearer. Grey = arrives somewhere else.",
+    draw: drawSimpleHome,
   },
   position: {
     title: "Position", h: 56,
@@ -125,7 +145,8 @@ const LANES = {
 };
 const DEFAULT_ORDER = Object.keys(LANES);
 S.order = load("order", DEFAULT_ORDER).filter((k) => LANES[k]);
-DEFAULT_ORDER.forEach((k) => { if (!S.order.includes(k)) S.order.push(k); });
+DEFAULT_ORDER.forEach((k, i) => { if (!S.order.includes(k)) S.order.splice(Math.min(i, S.order.length), 0, k); });
+S.mode = load("mode", "simple");  // "simple" or "advanced"
 S.hidden = new Set(load("hidden", []));
 
 // ---- your own Jev rows: one sentence each, sent to Jev word for word
@@ -136,7 +157,7 @@ function registerCustom(c) {
   LANES[id] = {
     title: "Jev: " + escapeHtml(c.text.length > 40 ? c.text.slice(0, 40) + "…" : c.text),
     desc: "“" + escapeHtml(c.text) + "”<br>Jev's probability of yes on each beat.",
-    h: 80, custom: c.id,
+    h: 80, custom: c.id, mode: "both",
     draw: (ctx, w, h) => {
       const v = S.customValues[c.id];
       if (!v) {
@@ -188,6 +209,7 @@ async function addCustomRow() {
 function laneVisible(id) {
   const L = LANES[id];
   if (S.hidden.has(id)) return false;
+  if (S.mode === "simple" ? !L.mode : L.mode === "simple") return false;
   const connected = S.jev && S.jev.beats;
   if (L.jev === true) return !!connected;
   if (L.jev === "status") return !connected;
@@ -205,7 +227,7 @@ function buildLanes() {
     el.dataset.id = id;
     el.innerHTML = `
       <div class="lane-label"><div class="lane-text">
-        <div class="lane-name"><span>${L.title}</span><span class="tools">
+        <div class="lane-name"><span>${L.title}</span>${L.info ? `<button class="info" data-info="${L.info}" title="How this works">ⓘ how it works</button>` : ""}<span class="tools">
           <button data-act="up" title="Move up">↑</button><button data-act="down" title="Move down">↓</button><button data-act="hide" title="Hide">×</button>
         </span></div>
         <div class="lane-desc">${L.desc}</div>
@@ -216,6 +238,8 @@ function buildLanes() {
     el.querySelector(".lane-body").style.minHeight = L.h + "px";
     if (L.controls) L.controls(el.querySelector(".lane-ctl"));
     else el.querySelector(".lane-ctl").remove();
+    const ib = el.querySelector(".info");
+    if (ib) ib.onclick = () => window.Explain && window.Explain.open(ib.dataset.info);
     el.querySelector(".tools").addEventListener("click", (e) => {
       const act = e.target.dataset.act;
       if (!act) return;
@@ -515,6 +539,59 @@ function stepLine(ctx, w, h, get, lo, hi, color, width = 1.25, pad = 6) {
     ctx.lineTo(x1, y(v));
   });
   ctx.stroke();
+}
+
+// ---- simple lanes
+function bands(ctx, w, h, rs, colorOf, textOf) {
+  ctx.font = "500 15px -apple-system, BlinkMacSystemFont, Inter, sans-serif";
+  ctx.textBaseline = "middle";
+  for (const r of rs) {
+    const x0 = tx(r.t0), x1 = tx(r.t1);
+    if (x1 < 0 || x0 > w) continue;
+    const [bg, fg] = colorOf(r);
+    ctx.fillStyle = bg; ctx.fillRect(Math.round(x0) + 1, 6, Math.max(1, x1 - x0 - 2), h - 12);
+    ctx.fillStyle = fg;
+    const lx = Math.max(x0, 0);
+    clipText(ctx, textOf(r), lx + 7, h / 2, x1 - lx - 10);
+  }
+}
+function drawSimpleChord(ctx, w, h) {
+  bands(ctx, w, h, runs((b) => b.chord.label), (r) => (r.v === "N.C." ? ["#0c0c0c", C.faint] : ["#181818", C.text]),
+    (r) => (r.v === "N.C." ? "" : fmt(r.v)));
+}
+function drawSimpleKey(ctx, w, h) {
+  const best = local().best, home = homeKey();
+  bands(ctx, w, h, runs((b) => best[b.i]), (r) => (r.v === home ? ["#3a2312", C.tension] : ["#181818", C.text]),
+    (r) => fmt(keyName(r.v)));
+}
+function drawSimpleTension(ctx, w, h) {
+  const pad = 6, y = (v) => h - pad - (v / 6) * (h - 2 * pad);
+  ctx.beginPath();
+  let lastX = null;
+  eachBeat(w, (b, x0, x1) => {
+    const v = b.gap_semitones;
+    if (v == null) return;
+    if (lastX == null) ctx.moveTo(x0, h);
+    ctx.lineTo(x0, y(v)); ctx.lineTo(x1, y(v)); lastX = x1;
+  });
+  if (lastX == null) return;
+  ctx.lineTo(lastX, h); ctx.closePath();
+  ctx.fillStyle = "rgba(255,138,61,0.18)"; ctx.fill();
+  stepLine(ctx, w, h, (b) => b.gap_semitones, 0, 6, C.tension, 2);
+}
+function axisTension(ctx, w, h) {
+  ctx.font = "11px -apple-system, Inter, sans-serif"; ctx.fillStyle = C.faint;
+  ctx.textAlign = "right"; ctx.textBaseline = "top"; ctx.fillText("far", w - 5, 4);
+  ctx.textBaseline = "bottom"; ctx.fillText("home", w - 5, h - 2);
+}
+function drawSimpleHome(ctx, w, h) {
+  eachBeat(w, (b, x0, x1) => {
+    if (!b.arrival) return;
+    const isHome = b.home_arrival > 0, v = isHome ? b.home_arrival : b.arrival;
+    const bh = Math.max(6, v * (h - 10)), bw = Math.max(4, Math.min(12, x1 - x0 - 2));
+    ctx.fillStyle = isHome ? C.arrive : "#555";
+    ctx.fillRect(x0 + 1, h - 4 - bh, bw, bh);
+  });
 }
 
 function gapValue(b, mode, weighted) {
@@ -843,6 +920,10 @@ async function init() {
   }
   if (!lb.children.length) lb.innerHTML = '<span class="hint">Empty. Put a recording (and its MIDI) in a folder inside <b>library</b>, then reload.</span>';
   $("#add-row").addEventListener("click", addCustomRow);
+  const mt = $("#mode-toggle");
+  seg(mt, [["simple", "Simple"], ["advanced", "Advanced"]], S.mode, (v) => {
+    S.mode = v; store("mode", v); buildLanes(); buildLaneMenu();
+  });
   $("#chip-jev").addEventListener("click", async () => {
     const st = S.status.jev;
     if (st.connected) return;

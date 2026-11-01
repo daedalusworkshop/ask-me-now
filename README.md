@@ -74,6 +74,11 @@ expected results.
 
 ## Using it
 
+**Simple / Advanced** (top right of the lanes): *Simple* shows five rows in
+plain words (Notes, Chord, Key right now, Tension, Lands home) plus your own
+Jev rows. Each has an **ⓘ how it works** button with a short step-by-step
+animation you can also hear. *Advanced* shows every measurement.
+
 1. **Load something.** Click *Test 1* or *Test 2*, or choose a video, audio or
    MIDI file. If you have a recording **and** a MIDI of that same performance,
    select both at once (Ctrl+click). You hear the recording, the analysis uses
