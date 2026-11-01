@@ -61,16 +61,15 @@ def load_config():
 
 
 def api_key():
-    key = os.environ.get("JEV_API_KEY")
-    if key:
-        return key.strip()
+    # .env first, so a key saved from the app wins over an old environment variable
     env = os.path.join(ROOT, ".env")
     if os.path.exists(env):
         for line in open(env):
             line = line.strip()
             if line.startswith("JEV_API_KEY=") and len(line) > len("JEV_API_KEY="):
                 return line.split("=", 1)[1].strip().strip('"').strip("'")
-    return None
+    key = os.environ.get("JEV_API_KEY")
+    return key.strip() if key else None
 
 
 def status():

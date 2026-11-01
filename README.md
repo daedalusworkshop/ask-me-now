@@ -75,6 +75,9 @@ expected results.
    select both at once (Ctrl+click). You hear the recording, the analysis uses
    the MIDI's notes (no transcribing), and the app lines the MIDI up with the
    audio automatically. Drum tracks in a MIDI are always ignored.
+   **Your library:** put a piece in its own folder inside `library/` (a
+   recording, its MIDI, or both) and it shows up as a one-click button. The
+   `library/` folder stays on your computer and is never uploaded to GitHub.
 2. **Paste a chord chart** (optional, but it's your ground truth). It
    overrides the detected chords:
    ```
@@ -170,9 +173,10 @@ Everything about TypeSafe's Jev is in **`listening_lab/jev.py`** and
 **`jev_config.json`**. It is connected and working (model `jev-latest`).
 
 * With no API key, the lane says *not connected* and nothing is sent anywhere.
-* To connect, copy `.env.example` to `.env` and paste your key after
-  `JEV_API_KEY=`. `.env` is git-ignored, so the key never goes to GitHub.
-  (Or set `JEV_API_KEY` as an environment variable.)
+* To connect, click the **Jev: not connected** chip at the top right and
+  paste your key. It's saved to `.env` on your computer, which is git-ignored,
+  so the key never goes to GitHub. (Or edit `.env` yourself, or set
+  `JEV_API_KEY` as an environment variable.)
 * How it asks: for every beat, Jev gets the chords and notes of the nearby
   beats plus five multiple-choice questions, and returns a probability for
   every option. A whole piece takes a couple of seconds.

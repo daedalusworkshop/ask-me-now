@@ -9,3 +9,6 @@ work/
 __pycache__/
 *.pyc
 .DS_Store
+
+# your own pieces (recordings, MIDI): stay on your computer
+library/

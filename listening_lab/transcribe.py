@@ -67,7 +67,8 @@ def transcribe(wav, out_mid, log=print):
             raise RuntimeError("Basic Pitch failed:\n" + (r.stderr or r.stdout)[-1200:])
         os.replace(made[0], out_mid)
         return "basic-pitch"
+    cmd = "run.bat --install-transcriber" if os.name == "nt" else "./run.sh --install-transcriber"
     raise RuntimeError(
         "No transcriber is installed, so audio can't be turned into notes yet.\n"
-        "Stop the app and run:  ./run.sh --install-transcriber\n"
-        "(Or load a MIDI file instead.)")
+        f"Stop the app and run:  {cmd}\n"
+        "(Or load a MIDI of the same recording with it.)")

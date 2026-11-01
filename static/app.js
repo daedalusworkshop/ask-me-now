@@ -4,7 +4,7 @@
 const $ = (s) => document.querySelector(s);
 const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 const C = {
-  line: "#1c1c1c", bar: "#262626", beat: "#0f0f0f", text: "#e8e8e8", dim: "#8a8a8a", faint: "#555",
+  line: "#1c1c1c", bar: "#262626", beat: "#0f0f0f", text: "#e8e8e8", dim: "#b4b4b4", faint: "#8a8a8a",
   tension: "#ff8a3d", sure: "#6fb7ff", rough: "#d8d8d8", arrive: "#7dffb0", disagree: "#ff4d6d",
 };
 const PC = ["C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"];
@@ -67,22 +67,22 @@ const LANES = {
     draw: drawHeading,
   },
   localhome: {
-    title: "Local home", h: 24 * 8,
+    title: "Local home", h: 24 * 12,
     desc: "Which key the surrounding music sounds like. Brighter = more likely. Orange outline = global home; orange dot = the heading.",
     controls: ctlWindow, draw: drawLocalHome, axis: axisKeys,
   },
   gap: {
-    title: "Gap (tension)", h: 96,
+    title: "Gap (tension)", h: 150,
     desc: "Distance from where it wants to go to home. 0 = heading home. Grey = the other measure. Green ticks = arrivals at home, grey = arrivals elsewhere.",
     controls: ctlGap, draw: drawGap, axis: (c, w, h) => axisNum(c, w, h, 0, 6, [0, 3, 6]),
   },
   confidence: {
-    title: "Confidence", h: 70,
+    title: "Confidence", h: 90,
     desc: "How sure the local-home lane is. High = one key stands out; low = lost between keys. Follows the window setting.",
     draw: drawConfidence, axis: (c, w, h) => axisNum(c, w, h, 0, 1, [0, 0.5, 1]),
   },
   roughness: {
-    title: "Roughness", h: 70,
+    title: "Roughness", h: 100,
     desc: "Sensory friction between the sounding notes (Plomp–Levelt / Sethares, 6 harmonics). The road surface, separate from tension.",
     draw: drawRoughness, axis: axisRough,
   },
@@ -92,23 +92,23 @@ const LANES = {
     draw: drawJevStatus,
   },
   jev_root: {
-    title: "Jev · chord root", h: 12 * 8, jev: true,
+    title: "Jev · chord root", h: 12 * 12, jev: true,
     desc: "Jev's probability for each root. White box = the deterministic root, red when they disagree.",
     draw: (c, w, h) => drawJevHeat(c, w, h, "chord_root", PC), axis: (c, w, h) => axisRows(c, w, h, PC),
   },
   jev_function: {
-    title: "Jev · function", h: 5 * 12, jev: true,
+    title: "Jev · function", h: 5 * 14, jev: true,
     desc: "Jev's tonic / predominant / dominant / chromatic / other, against the rule-based function.",
     draw: (c, w, h) => drawJevHeat(c, w, h, "chord_function", FUNCTIONS),
     axis: (c, w, h) => axisRows(c, w, h, ["T", "PD", "D", "chr", "–"]),
   },
   jev_home: {
-    title: "Jev · local home", h: 24 * 8, jev: true,
+    title: "Jev · local home", h: 24 * 12, jev: true,
     desc: "Jev's local key, same rows as the local-home lane. Box = the deterministic answer at the current window size.",
     draw: (c, w, h) => drawJevHeat(c, w, h, "local_home", KEY_ROWS.map(keyName)), axis: axisKeys,
   },
   jev_heading: {
-    title: "Jev · heading", h: 24 * 8, jev: true,
+    title: "Jev · heading", h: 24 * 12, jev: true,
     desc: "Where Jev thinks the music wants to go. Box = the rule-based top heading.",
     draw: (c, w, h) => drawJevHeat(c, w, h, "heading", KEY_ROWS.map(keyName)), axis: axisKeys,
   },
@@ -118,7 +118,7 @@ const LANES = {
     draw: drawJevArrival, axis: (c, w, h) => axisNum(c, w, h, 0, 1, [0, 1]),
   },
   disagree: {
-    title: "Jev vs rules", h: 5 * 12, jev: true,
+    title: "Jev vs rules", h: 5 * 14, jev: true,
     desc: "Red = Jev's top answer differs from the deterministic one. Rows: root, function, local home, heading, arrival.",
     draw: drawDisagree, axis: (c, w, h) => axisRows(c, w, h, ["root", "fn", "home", "head", "arr"]),
   },
@@ -300,7 +300,7 @@ function render() {
 }
 
 function drawRuler(ctx, w, h) {
-  ctx.font = "10px ui-monospace, Menlo, monospace";
+  ctx.font = "12px ui-monospace, Menlo, monospace";
   ctx.textBaseline = "middle";
   eachBeat(w, (b, x0) => {
     const xb = Math.round(x0) + 0.5;
@@ -337,7 +337,7 @@ function drawRoll(ctx, w, h) {
 function axisRoll(ctx, w, h) {
   if (!S.rollRange) return;
   const [lo, hi] = S.rollRange, rh = h / (hi - lo + 1);
-  ctx.font = "9px ui-monospace, Menlo, monospace"; ctx.fillStyle = C.faint; ctx.textAlign = "right"; ctx.textBaseline = "middle";
+  ctx.font = "11px ui-monospace, Menlo, monospace"; ctx.fillStyle = C.faint; ctx.textAlign = "right"; ctx.textBaseline = "middle";
   for (let p = lo; p <= hi; p++) if (p % 12 === 0) ctx.fillText("C" + (p / 12 - 1), w - 5, (hi - p + 0.5) * rh);
 }
 
@@ -355,7 +355,7 @@ function runs(get) {
 
 function drawPosition(ctx, w, h) {
   const chart = A().info.chart_used;
-  ctx.font = "500 13px -apple-system, BlinkMacSystemFont, Inter, sans-serif";
+  ctx.font = "500 15px -apple-system, BlinkMacSystemFont, Inter, sans-serif";
   ctx.textBaseline = "alphabetic";
   for (const r of runs((b) => b.chord.label + "|" + b.chord.source)) {
     const x0 = tx(r.t0), x1 = tx(r.t1);
@@ -368,7 +368,7 @@ function drawPosition(ctx, w, h) {
     ctx.globalAlpha = 1;
   }
   if (!chart) return;
-  ctx.font = "11px -apple-system, BlinkMacSystemFont, Inter, sans-serif";
+  ctx.font = "13px -apple-system, BlinkMacSystemFont, Inter, sans-serif";
   for (const r of runs((b) => b.detected.label)) {
     const x0 = tx(r.t0), x1 = tx(r.t1);
     if (x1 < 0 || x0 > w) continue;
@@ -390,7 +390,7 @@ function drawHeading(ctx, w, h) {
       ctx.fillStyle = k === 0 ? "rgba(255,138,61,.28)" : "rgba(255,138,61,.14)";
       ctx.fillRect(x0 + 2, y, Math.max(1, span * c.w), bh);
       ctx.fillStyle = k === 0 ? C.text : C.dim;
-      ctx.font = k === 0 ? "500 12px -apple-system, Inter, sans-serif" : "11px -apple-system, Inter, sans-serif";
+      ctx.font = k === 0 ? "500 14px -apple-system, Inter, sans-serif" : "13px -apple-system, Inter, sans-serif";
       const full = `${fmt(c.name)}  ${pct(c.w)}`;
       const txt = ctx.measureText(full).width <= span - 6 ? full : fmt(c.name);
       const lx = Math.max(x0, 0);
@@ -425,7 +425,7 @@ function drawLocalHome(ctx, w, h) {
 
 function axisKeys(ctx, w, h) {
   const rh = h / 24;
-  ctx.font = `${Math.min(9, rh)}px -apple-system, Inter, sans-serif`;
+  ctx.font = `${Math.min(12, rh)}px -apple-system, Inter, sans-serif`;
   ctx.textAlign = "right"; ctx.textBaseline = "middle";
   KEY_ROWS.forEach((k, r) => {
     ctx.fillStyle = k === homeKey() ? C.tension : k < 12 ? C.dim : C.faint;
@@ -435,13 +435,13 @@ function axisKeys(ctx, w, h) {
 
 function axisRows(ctx, w, h, labels) {
   const rh = h / labels.length;
-  ctx.font = `${Math.min(9, rh)}px -apple-system, Inter, sans-serif`;
+  ctx.font = `${Math.min(12, rh)}px -apple-system, Inter, sans-serif`;
   ctx.textAlign = "right"; ctx.textBaseline = "middle"; ctx.fillStyle = C.dim;
   labels.forEach((l, r) => ctx.fillText(fmt(l), w - 5, (r + 0.5) * rh));
 }
 
 function axisNum(ctx, w, h, lo, hi, ticks, pad = 6) {
-  ctx.font = "9px ui-monospace, Menlo, monospace"; ctx.fillStyle = C.faint;
+  ctx.font = "11px ui-monospace, Menlo, monospace"; ctx.fillStyle = C.faint;
   ctx.textAlign = "right"; ctx.textBaseline = "middle";
   for (const t of ticks) ctx.fillText(String(t), w - 5, h - pad - ((t - lo) / (hi - lo)) * (h - 2 * pad));
 }
@@ -499,7 +499,7 @@ function axisRough(ctx, w, h) {
 
 function drawJevStatus(ctx, w, h) {
   const st = (S.jev && S.jev.status) || (S.status && S.status.jev) || { message: "not connected" };
-  ctx.fillStyle = C.faint; ctx.font = "12px -apple-system, Inter, sans-serif"; ctx.textBaseline = "middle";
+  ctx.fillStyle = C.faint; ctx.font = "14px -apple-system, Inter, sans-serif"; ctx.textBaseline = "middle";
   ctx.fillText(st.connected ? "connected — press “ask Jev” to fill these lanes" : st.message, 10, h / 2);
 }
 
@@ -724,7 +724,8 @@ function showData(first) {
 function updateJevChip() {
   const st = (S.jev && S.jev.status) || S.status.jev;
   const c = $("#chip-jev");
-  c.textContent = "Jev: " + st.message;
+  c.textContent = "Jev: " + st.message + (st.connected ? "" : " · click to add key");
+  c.style.cursor = st.connected ? "" : "pointer";
   c.className = "chip" + (st.mock ? " mock" : st.connected ? " on" : "");
   $("#ask-jev").disabled = !st.connected || !S.data;
 }
@@ -773,6 +774,26 @@ async function init() {
     b.onclick = () => { S.source = { test: name }; $("#beat-source").value = "auto"; $("#chart-start").value = 0; $("#home").value = "auto"; analyze({ first_load: true, home_override: null }); };
     tb.appendChild(b);
   }
+  const lb = $("#library-buttons");
+  for (const item of S.status.library || []) {
+    const b = document.createElement("button");
+    b.className = "btn";
+    b.textContent = item.title + (item.media && item.midi ? " ♪+MIDI" : "");
+    b.onclick = () => { S.source = { library: item.id }; $("#file-name").textContent = ""; $("#beat-source").value = "auto"; $("#chart-start").value = 0; $("#home").value = "auto"; analyze({ first_load: true, home_override: null }, "Loading " + item.title + "…"); };
+    lb.appendChild(b);
+  }
+  if (!lb.children.length) lb.innerHTML = '<span class="hint">Empty. Put a recording (and its MIDI) in a folder inside <b>library</b>, then reload.</span>';
+  $("#chip-jev").addEventListener("click", async () => {
+    const st = S.status.jev;
+    if (st.connected) return;
+    const key = prompt("Paste your TypeSafe API key (from console.typesafe.ai/keys). It's saved only on this computer.");
+    if (!key) return;
+    try {
+      const r = await api("/api/jev-key", { key });
+      S.status.jev = r.jev; S.jev = null; updateJevChip();
+      toast(r.jev.connected ? "Jev connected." : "Jev: " + r.jev.message);
+    } catch (e) { toast(e.message); }
+  });
   $("#chip-trans").textContent = S.status.transcriber ? `transcriber: ${S.status.transcriber}` : "no transcriber (tests + MIDI work)";
   $("#home").innerHTML = `<option value="auto">auto</option>`;
   $("#export-csv").classList.add("disabled"); $("#export-json").classList.add("disabled");

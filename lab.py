@@ -26,6 +26,7 @@ from listening_lab import transcribe as TR
 ROOT = os.path.dirname(os.path.abspath(__file__))
 STATIC = os.path.join(ROOT, "static")
 WORK = os.path.join(ROOT, "work")
+LIBRARY = os.path.join(ROOT, "library")  # your own pieces; git-ignored
 PORT = int(os.environ.get("PORT", "8765"))
 
 VIDEO_EXT = {".mp4", ".m4v", ".mov", ".webm"}
@@ -95,6 +96,50 @@ def session_from_upload(path, filename, log=print):
             media = {"url": f"/media/{sid}/audio.wav", "kind": "audio"}
     return sid, {"title": filename, "notes": notes, "info": info, "media": media,
                  "transcriber": transcriber, "defaults": {}, "expect": None}
+
+
+def list_library():
+    """Pieces in library/: each subfolder is one piece (a recording, a MIDI,
+    or both, which get paired). Loose files at the top count as pieces too."""
+    items = []
+    if not os.path.isdir(LIBRARY):
+        return items
+    media_ext = VIDEO_EXT | AUDIO_EXT | {".mkv", ".avi"}
+    for name in sorted(os.listdir(LIBRARY), key=str.lower):
+        full = os.path.join(LIBRARY, name)
+        if os.path.isdir(full):
+            files = sorted(os.listdir(full))
+            media = next((f for f in files if os.path.splitext(f)[1].lower() in media_ext), None)
+            midi = next((f for f in files if os.path.splitext(f)[1].lower() in MIDI_EXT), None)
+            if media or midi:
+                items.append({"id": name, "title": name, "media": media, "midi": midi})
+        elif os.path.splitext(name)[1].lower() in media_ext | MIDI_EXT:
+            items.append({"id": name, "title": os.path.splitext(name)[0],
+                          "media": None if name.lower().endswith((".mid", ".midi")) else name,
+                          "midi": name if name.lower().endswith((".mid", ".midi")) else None})
+    return items
+
+
+def session_from_library(item_id):
+    import shutil
+    item = next((i for i in list_library() if i["id"] == item_id), None)
+    if not item:
+        raise RuntimeError(f"'{item_id}' isn't in the library folder any more.")
+    folder = os.path.join(LIBRARY, item_id) if os.path.isdir(os.path.join(LIBRARY, item_id)) else LIBRARY
+    sid = "lib-" + hashlib.sha1(item_id.encode()).hexdigest()[:12]
+    d = os.path.join(WORK, sid)
+    os.makedirs(d, exist_ok=True)
+    main = item["media"] or item["midi"]
+    src = os.path.join(d, "source" + os.path.splitext(main)[1].lower())
+    shutil.copyfile(os.path.join(folder, main), src)
+    paired = os.path.join(d, "paired.mid")
+    if item["media"] and item["midi"]:
+        shutil.copyfile(os.path.join(folder, item["midi"]), paired)
+    elif os.path.exists(paired):
+        os.remove(paired)
+    _sid, sess = session_from_upload(src, main)
+    sess["title"] = item["title"]
+    return sid, sess
 
 
 # ---------------------------------------------------------------- analysis
@@ -290,6 +335,7 @@ class Handler(BaseHTTPRequestHandler):
                     "ffmpeg": bool(TR.ffmpeg_exe()),
                     "jev": J.status(),
                     "tests": {k: {"title": v["title"], "expect": v["expect"]} for k, v in testpieces.TESTS.items()},
+                    "library": list_library(),
                     "keys": T.KEY_NAMES,
                 })
             m = re.match(r"^/api/export/([\w.-]+)\.(csv|json)$", path)
@@ -353,6 +399,11 @@ class Handler(BaseHTTPRequestHandler):
                         if sid not in SESSIONS:
                             sid, sess = session_from_test(p["test"])
                             SESSIONS[sid] = sess
+                    elif p.get("library"):
+                        sid = "lib-" + hashlib.sha1(p["library"].encode()).hexdigest()[:12]
+                        if sid not in SESSIONS:
+                            sid, sess = session_from_library(p["library"])
+                            SESSIONS[sid] = sess
                     elif p.get("upload"):
                         sid = p["upload"]
                         if sid not in SESSIONS:
@@ -372,6 +423,18 @@ class Handler(BaseHTTPRequestHandler):
                     sess["params"] = p
                     sess.pop("jev", None)
                 return self._json(payload(sid, sess, result))
+
+            if path == "/api/jev-key":
+                # Save the TypeSafe key to .env on this computer (git-ignored). Never logged.
+                key = (json.loads(self._body() or b"{}").get("key") or "").strip()
+                if not re.fullmatch(r"[\w.\-]{8,512}", key):
+                    return self._error("That doesn't look like an API key.")
+                env = os.path.join(ROOT, ".env")
+                lines = [l for l in (open(env).read().splitlines() if os.path.exists(env) else [])
+                         if not l.startswith("JEV_API_KEY=")]
+                with open(env, "w") as f:
+                    f.write("\n".join(lines + [f"JEV_API_KEY={key}"]) + "\n")
+                return self._json({"jev": J.status()})
 
             if path == "/api/jev":
                 p = json.loads(self._body() or b"{}")
